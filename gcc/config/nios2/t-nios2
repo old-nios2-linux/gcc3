@@ -30,10 +30,16 @@ TARGET_LIBGCC2_CFLAGS = -O2
 
 $(FPBIT): $(srcdir)/config/fp-bit.c Makefile
 	echo '#define FLOAT'          >  ${FPBIT}
+	echo '#ifndef __nios2_big_endian__' >> ${FPBIT}
+	echo '#define FLOAT_BIT_ORDER_MISMATCH' >> ${FPBIT}
+	echo '#endif' >> ${FPBIT}
 	cat $(srcdir)/config/fp-bit.c >> ${FPBIT}
 
 $(DPBIT): $(srcdir)/config/fp-bit.c Makefile
 	echo ''          >  ${DPBIT}
+	echo '#ifndef __nios2_big_endian__' >> ${DPBIT}
+	echo '#define FLOAT_BIT_ORDER_MISMATCH' >> ${DPBIT}
+	echo '#endif' >> ${DPBIT}
 	cat $(srcdir)/config/fp-bit.c >> ${DPBIT}
 
 EXTRA_MULTILIB_PARTS = crtbegin.o crtend.o crti.o crtn.o 
@@ -77,7 +83,38 @@ $(T)crtn.o: $(srcdir)/config/nios2/crtn.asm $(GCC_PASSES)
 ## sets of options: -m68000, -m68020, -msoft-float, -m68000 -msoft-float,
 ## and -m68020 -msoft-float.
 
-MULTILIB_OPTIONS = mno-hw-mul mhw-mulx mstack-check
+
+## The BUILD_BE_MULTILIB and BUILD_PG_MULTILIB variables allow the
+## makefile user to enable/disable the generation of the precompiled
+## big endian and profiling libraries. By default, the big endian 
+## libraries are not created on a windows build and the profiling
+## libraries are not created on a Solaris build. All other library 
+## combinations are created by default.
+
+#By default, avoid building big endian libraries during a Windows build.
+ifeq ($(DEV_HOST_OS), win32)
+BUILD_BE_MULTILIB ?= 0
+endif
+
+#By default, avoid building the profiling libraries during a Solaris build.
+ifeq ($(DEV_HOST_OS), solaris)
+BUILD_PG_MULTILIB ?= 0
+endif
+
+BUILD_BE_MULTILIB ?= 1
+BUILD_PG_MULTILIB ?= 1
+
+MULTILIB_OPTIONS = mno-hw-mul mhw-mulx mstack-check mcustom-fpu-cfg=60-1 mcustom-fpu-cfg=60-2
+
+#Add the profiling flag to the multilib variable if required
+ifeq ($(BUILD_PG_MULTILIB), 1)
+MULTILIB_OPTIONS += pg
+endif
+
+#Add the big endian flag to the multilib variable if required
+ifeq ($(BUILD_BE_MULTILIB), 1)
+MULTILIB_OPTIONS += EB/EL
+endif
 
 ## MULTILIB_DIRNAMES
 ## If MULTILIB_OPTIONS is used, this variable specifies the directory names
@@ -98,6 +135,12 @@ MULTILIB_OPTIONS = mno-hw-mul mhw-mulx mstack-check
 ## synonyms.  In that case, set MULTILIB_MATCHES to a list of items of the
 ## form option=option to describe all relevant synonyms.  For example,
 ## m68000=mc68000 m68020=mc68020.
+
+
+ifeq ($(BUILD_BE_MULTILIB), 1)
+MULTILIB_MATCHES = EL=mel EB=meb
+endif
+
 ##
 ## MULTILIB_EXCEPTIONS
 ## Sometimes when there are multiple sets of MULTILIB_OPTIONS being
@@ -112,7 +155,7 @@ MULTILIB_OPTIONS = mno-hw-mul mhw-mulx mstack-check
 ## *mcall-aix/*fleading-underscore* *mlittle/*mcall-aix*
 ##
 
-MULTILIB_EXCEPTIONS = *mno-hw-mul/*mhw-mulx*
+MULTILIB_EXCEPTIONS = *mno-hw-mul/*mhw-mulx* *mcustom-fpu-cfg=60-1/*mcustom-fpu-cfg=60-2*
 
 ##
 ## MULTILIB_EXTRA_OPTS Sometimes it is desirable that when building

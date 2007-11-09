@@ -1322,7 +1322,10 @@ m32rle-*-linux*)
 	fi
 	;;
 # JBG
-nios2-*-* | nios2-*-*)
+nios2-*-*_eb)
+	tm_file="elfos.h nios2/big.h ${tm_file}"
+	;;
+nios2-*-*)
 	tm_file="elfos.h ${tm_file}"
 	;;
 # m68hc11 and m68hc12 share the same machine description.

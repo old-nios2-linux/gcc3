@@ -20,6 +20,36 @@
 ;; Boston, MA 02111-1307, USA.  */
 
 
+
+
+;*****************************************************************************
+;*
+;* constraint strings
+;*
+;*****************************************************************************
+;
+; We use the following constraint letters for constants
+;
+;  I: -32768 to -32767
+;  J: 0 to 65535
+;  K: $nnnn0000 for some nnnn
+;  L: 0 to 31 (for shift counts)
+;  M: 0
+;  N: 0 to 255 (for custom instruction numbers)
+;  O: 0 to 31 (for control register numbers)
+;
+; We use the following built-in register classes:
+;
+;  r: general purpose register (r0..r31)
+;  m: memory operand
+;
+; Plus, we define the following constraint strings:
+;
+;  S: symbol that is in the "small data" area
+;  Dnn: Dnn_REG (just rnn)
+;
+
+
 
 ;*****************************************************************************
 ;*
@@ -57,6 +87,24 @@
   (UNSPEC_RDCTL 11)
   (UNSPEC_TRAP 12)
   (UNSPEC_STACK_OVERFLOW_DETECT_AND_TRAP 13)
+  (UNSPEC_FCOSS 14)
+  (UNSPEC_FCOSD 15)
+  (UNSPEC_FSINS 16)
+  (UNSPEC_FSIND 17)
+  (UNSPEC_FTANS 18)
+  (UNSPEC_FTAND 19)
+  (UNSPEC_FATANS 20)
+  (UNSPEC_FATAND 21)
+  (UNSPEC_FEXPS 22)
+  (UNSPEC_FEXPD 23)
+  (UNSPEC_FLOGS 24)
+  (UNSPEC_FLOGD 25)
+  (UNSPEC_FWRX 26)
+  (UNSPEC_FWRY 27)
+  (UNSPEC_FRDXLO 28)
+  (UNSPEC_FRDXHI 29)
+  (UNSPEC_FRDY 30)
+  ;; Note that values 100..151 are used by custom instructions, see below.
 ])
 
 
@@ -162,7 +210,7 @@
 
 (define_insn "ldbio"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(unspec_volatile:SI [(const_int 0)] UNSPEC_LDBIO))
+        (unspec_volatile:SI [(const_int 0)] UNSPEC_LDBIO))
    (use (match_operand:SI 1 "memory_operand" "m"))]
   ""
   "ldbio\\t%0, %1"
@@ -170,7 +218,7 @@
 
 (define_insn "ldbuio"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(unspec_volatile:SI [(const_int 0)] UNSPEC_LDBUIO))
+        (unspec_volatile:SI [(const_int 0)] UNSPEC_LDBUIO))
    (use (match_operand:SI 1 "memory_operand" "m"))]
   ""
   "ldbuio\\t%0, %1"
@@ -178,7 +226,7 @@
 
 (define_insn "stbio"
   [(set (match_operand:SI 0 "memory_operand" "=m")
-	(match_operand:SI 1 "reg_or_0_operand"   "rM"))
+        (match_operand:SI 1 "reg_or_0_operand"   "rM"))
    (unspec_volatile:SI [(const_int 0)] UNSPEC_STBIO)]
   ""
   "stbio\\t%z1, %0"
@@ -209,7 +257,7 @@
 
 (define_insn "ldhio"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(unspec_volatile:SI [(const_int 0)] UNSPEC_LDHIO))
+        (unspec_volatile:SI [(const_int 0)] UNSPEC_LDHIO))
    (use (match_operand:SI 1 "memory_operand" "m"))]
   ""
   "ldhio\\t%0, %1"
@@ -217,7 +265,7 @@
 
 (define_insn "ldhuio"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(unspec_volatile:SI [(const_int 0)] UNSPEC_LDHUIO))
+        (unspec_volatile:SI [(const_int 0)] UNSPEC_LDHUIO))
    (use (match_operand:SI 1 "memory_operand" "m"))]
   ""
   "ldhuio\\t%0, %1"
@@ -225,7 +273,7 @@
 
 (define_insn "sthio"
   [(set (match_operand:SI 0 "memory_operand" "=m")
-	(match_operand:SI 1 "reg_or_0_operand"   "rM"))
+        (match_operand:SI 1 "reg_or_0_operand"   "rM"))
    (unspec_volatile:SI [(const_int 0)] UNSPEC_STHIO)]
   ""
   "sthio\\t%z1, %0"
@@ -257,7 +305,7 @@
 
 (define_insn "ldwio"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(unspec_volatile:SI [(const_int 0)] UNSPEC_LDWIO))
+        (unspec_volatile:SI [(const_int 0)] UNSPEC_LDWIO))
    (use (match_operand:SI 1 "memory_operand" "m"))]
   ""
   "ldwio\\t%0, %1"
@@ -265,7 +313,7 @@
 
 (define_insn "stwio"
   [(set (match_operand:SI 0 "memory_operand" "=m")
-	(match_operand:SI 1 "reg_or_0_operand"   "rM"))
+        (match_operand:SI 1 "reg_or_0_operand"   "rM"))
    (unspec_volatile:SI [(const_int 0)] UNSPEC_STWIO)]
   ""
   "stwio\\t%z1, %0"
@@ -282,35 +330,35 @@
 
 (define_insn "zero_extendhisi2"
   [(set (match_operand:SI 0 "register_operand" "=r,r")
-	(zero_extend:SI (match_operand:HI 1 "nonimmediate_operand" "r,m")))]
+        (zero_extend:SI (match_operand:HI 1 "nonimmediate_operand" "r,m")))]
   ""
   "@
     andi\\t%0, %1, 0xffff
     ldhu%o1\\t%0, %1"
-  [(set_attr "type"	"alu,ld")])
+  [(set_attr "type"     "alu,ld")])
 
 (define_insn "zero_extendqihi2"
   [(set (match_operand:HI 0 "register_operand" "=r,r")
-	(zero_extend:HI (match_operand:QI 1 "nonimmediate_operand" "r,m")))]
+        (zero_extend:HI (match_operand:QI 1 "nonimmediate_operand" "r,m")))]
   ""
   "@
     andi\\t%0, %1, 0xff
     ldbu%o1\\t%0, %1"
-  [(set_attr "type"	"alu,ld")])
+  [(set_attr "type"     "alu,ld")])
 
 (define_insn "zero_extendqisi2"
   [(set (match_operand:SI 0 "register_operand" "=r,r")
-	(zero_extend:SI (match_operand:QI 1 "nonimmediate_operand" "r,m")))]
+        (zero_extend:SI (match_operand:QI 1 "nonimmediate_operand" "r,m")))]
   ""
   "@
     andi\\t%0, %1, 0xff
     ldbu%o1\\t%0, %1"
-  [(set_attr "type"	"alu,ld")])
+  [(set_attr "type"     "alu,ld")])
 
 
 
 ;*****************************************************************************
-;*	
+;*      
 ;* sign extension
 ;*
 ;*****************************************************************************
@@ -341,10 +389,10 @@
 
 (define_insn "extendhisi2_internal"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(sign_extend:SI (match_operand:HI 1 "memory_operand" "m")))]
+        (sign_extend:SI (match_operand:HI 1 "memory_operand" "m")))]
   ""
   "ldh%o1\\t%0, %1"
-  [(set_attr "type"	"ld")])
+  [(set_attr "type"     "ld")])
 
 
 (define_expand "extendqihi2"
@@ -377,10 +425,10 @@
 
 (define_insn "extendqihi2_internal"
   [(set (match_operand:HI 0 "register_operand" "=r")
-	(sign_extend:HI (match_operand:QI 1 "memory_operand" "m")))]
+        (sign_extend:HI (match_operand:QI 1 "memory_operand" "m")))]
   ""
   "ldb%o1\\t%0, %1"
-  [(set_attr "type"	"ld")])
+  [(set_attr "type"     "ld")])
 
 
 (define_expand "extendqisi2"
@@ -410,10 +458,10 @@
 
 (define_insn "extendqisi2_insn"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(sign_extend:SI (match_operand:QI 1 "memory_operand" "m")))]
+        (sign_extend:SI (match_operand:QI 1 "memory_operand" "m")))]
   ""
   "ldb%o1\\t%0, %1"
-  [(set_attr "type"	"ld")])
+  [(set_attr "type"     "ld")])
 
 
 
@@ -432,6 +480,26 @@
   "add%i2\\t%0, %1, %z2"
   [(set_attr "type" "alu")])
 
+(define_insn "addsf3"
+  [(set (match_operand:SF 0 "register_operand"          "=r")
+        (plus:SF (match_operand:SF 1 "register_operand" "%r")
+                 (match_operand:SF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_addsf3].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_addsf3].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "adddf3"
+  [(set (match_operand:DF 0 "register_operand"          "=r")
+        (plus:DF (match_operand:DF 1 "register_operand" "%r")
+                 (match_operand:DF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_adddf3].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_adddf3].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
 (define_insn "subsi3"
   [(set (match_operand:SI 0 "register_operand"           "=r")
         (minus:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
@@ -440,6 +508,26 @@
   "sub\\t%0, %z1, %2"
   [(set_attr "type" "alu")])
 
+(define_insn "subsf3"
+  [(set (match_operand:SF 0 "register_operand"          "=r")
+        (minus:SF (match_operand:SF 1 "register_operand" "r")
+                  (match_operand:SF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_subsf3].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_subsf3].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "subdf3"
+  [(set (match_operand:DF 0 "register_operand"          "=r")
+        (minus:DF (match_operand:DF 1 "register_operand" "r")
+                  (match_operand:DF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_subdf3].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_subdf3].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
 (define_insn "mulsi3"
   [(set (match_operand:SI 0 "register_operand"            "=r,r")
         (mult:SI (match_operand:SI 1 "register_operand"    "r,r")
@@ -447,6 +535,26 @@
   "TARGET_HAS_MUL"
   "mul%i2\\t%0, %1, %z2"
   [(set_attr "type" "mul")])
+
+(define_insn "mulsf3"
+  [(set (match_operand:SF 0 "register_operand"          "=r")
+        (mult:SF (match_operand:SF 1 "register_operand" "%r")
+                 (match_operand:SF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_mulsf3].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_mulsf3].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "muldf3"
+  [(set (match_operand:DF 0 "register_operand"          "=r")
+        (mult:DF (match_operand:DF 1 "register_operand" "%r")
+                 (match_operand:DF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_muldf3].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_muldf3].output) (insn);
+  }
+  [(set_attr "type" "custom")])
 
 (define_expand "divsi3"
   [(set (match_operand:SI 0 "register_operand"            "=r")
@@ -457,12 +565,12 @@
   if (!TARGET_HAS_DIV)
     {
       if (!TARGET_FAST_SW_DIV)
-	FAIL;
+        FAIL;
       else
         {
-	  if (nios2_emit_expensive_div (operands, SImode))
-	    DONE;
-	}
+          if (nios2_emit_expensive_div (operands, SImode))
+            DONE;
+        }
     }
 })
 
@@ -474,6 +582,26 @@
   "div\\t%0, %1, %2"
   [(set_attr "type" "div")])
 
+(define_insn "divsf3"
+  [(set (match_operand:SF 0 "register_operand"          "=r")
+        (div:SF (match_operand:SF 1 "register_operand" "r")
+                (match_operand:SF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_divsf3].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_divsf3].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "divdf3"
+  [(set (match_operand:DF 0 "register_operand"          "=r")
+        (div:DF (match_operand:DF 1 "register_operand" "r")
+                (match_operand:DF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_divdf3].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_divdf3].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
 (define_insn "udivsi3"
   [(set (match_operand:SI 0 "register_operand"            "=r")
         (udiv:SI (match_operand:SI 1 "register_operand"     "r")
@@ -484,49 +612,112 @@
 
 (define_insn "smulsi3_highpart"
   [(set (match_operand:SI 0 "register_operand"                            "=r")
-	(truncate:SI
-	 (lshiftrt:DI
-	  (mult:DI (sign_extend:DI (match_operand:SI 1 "register_operand"  "r"))
-		   (sign_extend:DI (match_operand:SI 2 "register_operand"  "r")))
-	  (const_int 32))))]
+        (truncate:SI
+         (lshiftrt:DI
+          (mult:DI (sign_extend:DI (match_operand:SI 1 "register_operand"  "r"))
+                   (sign_extend:DI (match_operand:SI 2 "register_operand"  "r")))
+          (const_int 32))))]
   "TARGET_HAS_MULX"
   "mulxss\\t%0, %1, %2"
   [(set_attr "type" "mul")])
 
 (define_insn "umulsi3_highpart"
   [(set (match_operand:SI 0 "register_operand"                            "=r")
-	(truncate:SI
-	 (lshiftrt:DI
-	  (mult:DI (zero_extend:DI (match_operand:SI 1 "register_operand"  "r"))
-		   (zero_extend:DI (match_operand:SI 2 "register_operand"  "r")))
-	  (const_int 32))))]
+        (truncate:SI
+         (lshiftrt:DI
+          (mult:DI (zero_extend:DI (match_operand:SI 1 "register_operand"  "r"))
+                   (zero_extend:DI (match_operand:SI 2 "register_operand"  "r")))
+          (const_int 32))))]
   "TARGET_HAS_MULX"
   "mulxuu\\t%0, %1, %2"
   [(set_attr "type" "mul")])
 
 
-(define_expand "mulsidi3"
+(define_expand "mulsidi3_little_endian"
     [(set (subreg:SI (match_operand:DI 0 "register_operand" "") 0)
-	  (mult:SI (match_operand:SI 1 "register_operand" "")
-		   (match_operand:SI 2 "register_operand" "")))
+          (mult:SI (match_operand:SI 1 "register_operand" "")
+                   (match_operand:SI 2 "register_operand" "")))
      (set (subreg:SI (match_dup 0) 4)
-	  (truncate:SI (lshiftrt:DI (mult:DI (sign_extend:DI (match_dup 1))
-					     (sign_extend:DI (match_dup 2)))
-				    (const_int 32))))]
+          (truncate:SI (lshiftrt:DI (mult:DI (sign_extend:DI (match_dup 1))
+                                             (sign_extend:DI (match_dup 2)))
+                                    (const_int 32))))]
+  "TARGET_HAS_MULX && !WORDS_BIG_ENDIAN"
+  "")
+
+(define_expand "mulsidi3_big_endian"
+    [(set (subreg:SI (match_operand:DI 0 "register_operand" "") 4)
+          (mult:SI (match_operand:SI 1 "register_operand" "")
+                   (match_operand:SI 2 "register_operand" "")))
+     (set (subreg:SI (match_dup 0) 0)
+          (truncate:SI (lshiftrt:DI (mult:DI (sign_extend:DI (match_dup 1))
+                                             (sign_extend:DI (match_dup 2)))
+                                    (const_int 32))))]
+  "TARGET_HAS_MULX && WORDS_BIG_ENDIAN"
+  "")
+
+(define_expand "mulsidi3"
+    [(match_operand:DI 0 "register_operand" "")
+     (match_operand:SI 1 "register_operand" "")
+     (match_operand:SI 2 "register_operand" "")]
   "TARGET_HAS_MULX"
+  {
+    if (WORDS_BIG_ENDIAN)
+    {
+        emit_insn (gen_mulsidi3_big_endian (operands[0],
+                                            operands[1],
+                                            operands[2]));
+    }
+    else
+    {
+        emit_insn (gen_mulsidi3_little_endian (operands[0],
+                                               operands[1],
+                                               operands[2]));
+    }
+    DONE;
+  })
+
+(define_expand "umulsidi3_little_endian"
+    [(set (subreg:SI (match_operand:DI 0 "register_operand" "") 0)
+          (mult:SI (match_operand:SI 1 "register_operand" "")
+                   (match_operand:SI 2 "register_operand" "")))
+     (set (subreg:SI (match_dup 0) 4)
+          (truncate:SI (lshiftrt:DI (mult:DI (zero_extend:DI (match_dup 1))
+                                             (zero_extend:DI (match_dup 2)))
+                                    (const_int 32))))]
+  "TARGET_HAS_MULX && !WORDS_BIG_ENDIAN"
+  "")
+
+(define_expand "umulsidi3_big_endian"
+    [(set (subreg:SI (match_operand:DI 0 "register_operand" "") 4)
+          (mult:SI (match_operand:SI 1 "register_operand" "")
+                   (match_operand:SI 2 "register_operand" "")))
+     (set (subreg:SI (match_dup 0) 0)
+          (truncate:SI (lshiftrt:DI (mult:DI (zero_extend:DI (match_dup 1))
+                                             (zero_extend:DI (match_dup 2)))
+                                    (const_int 32))))]
+  "TARGET_HAS_MULX && WORDS_BIG_ENDIAN"
   "")
 
 (define_expand "umulsidi3"
-    [(set (subreg:SI (match_operand:DI 0 "register_operand" "") 0)
-	  (mult:SI (match_operand:SI 1 "register_operand" "")
-		   (match_operand:SI 2 "register_operand" "")))
-     (set (subreg:SI (match_dup 0) 4)
-	  (truncate:SI (lshiftrt:DI (mult:DI (zero_extend:DI (match_dup 1))
-					     (zero_extend:DI (match_dup 2)))
-				    (const_int 32))))]
+    [(match_operand:DI 0 "register_operand" "")
+     (match_operand:SI 1 "register_operand" "")
+     (match_operand:SI 2 "register_operand" "")]
   "TARGET_HAS_MULX"
-  "")
-
+  {
+    if (WORDS_BIG_ENDIAN)
+    {
+        emit_insn (gen_umulsidi3_big_endian (operands[0],
+                                             operands[1],
+                                             operands[2]));
+    }
+    else
+    {
+        emit_insn (gen_umulsidi3_little_endian (operands[0],
+                                                operands[1],
+                                                operands[2]));
+    }
+    DONE;
+  })
 
 
 ;*****************************************************************************
@@ -537,7 +728,7 @@
 
 (define_insn "negsi2"
   [(set (match_operand:SI 0 "register_operand"        "=r")
-	(neg:SI (match_operand:SI 1 "register_operand" "r")))]
+        (neg:SI (match_operand:SI 1 "register_operand" "r")))]
   ""
 {
   operands[2] = const0_rtx;
@@ -545,9 +736,27 @@
 }
   [(set_attr "type" "alu")])
 
+(define_insn "negsf2"
+  [(set (match_operand:SF 0 "register_operand"          "=r")
+        (neg:SF (match_operand:SF 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_negsf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_negsf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "negdf2"
+  [(set (match_operand:DF 0 "register_operand"          "=r")
+        (neg:DF (match_operand:DF 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_negdf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_negdf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
 (define_insn "one_cmplsi2"
   [(set (match_operand:SI 0 "register_operand"        "=r")
-	(not:SI (match_operand:SI 1 "register_operand" "r")))]
+        (not:SI (match_operand:SI 1 "register_operand" "r")))]
   ""
 {
   operands[2] = const0_rtx;
@@ -555,9 +764,253 @@
 }
   [(set_attr "type" "alu")])
 
+
+;*****************************************************************************
+;*
+;* Miscellaneous floating point
+;*
+;*****************************************************************************
+(define_insn "nios2_fwrx"
+  [(unspec_volatile [(match_operand:DF 0 "register_operand" "r")] UNSPEC_FWRX)]
+  "nios2_fpu_insns[nios2_fpu_nios2_fwrx].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_fwrx].output) (insn);
+  }
+  [(set_attr "type" "custom")])
 
+(define_insn "nios2_fwry"
+  [(unspec_volatile [(match_operand:SF 0 "register_operand" "r")] UNSPEC_FWRY)]
+  "nios2_fpu_insns[nios2_fpu_nios2_fwry].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_fwry].output) (insn);
+  }
+  [(set_attr "type" "custom")])
 
-; Logical Operantions
+(define_insn "nios2_frdxlo"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (unspec_volatile:SF [(const_int 0)] UNSPEC_FRDXLO))]
+  "nios2_fpu_insns[nios2_fpu_nios2_frdxlo].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_frdxlo].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "nios2_frdxhi"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (unspec_volatile:SF [(const_int 0)] UNSPEC_FRDXHI))]
+  "nios2_fpu_insns[nios2_fpu_nios2_frdxhi].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_frdxhi].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "nios2_frdy"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (unspec_volatile:SF [(const_int 0)] UNSPEC_FRDY))]
+  "nios2_fpu_insns[nios2_fpu_nios2_frdy].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_frdy].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "minsf3"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (if_then_else:SF (lt:SF (match_operand:SF 1 "register_operand" "%r")
+                                (match_operand:SF 2 "register_operand" "r"))
+          (match_dup 1)
+          (match_dup 2)))]
+  "nios2_fpu_insns[nios2_fpu_minsf3].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_minsf3].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "mindf3"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (if_then_else:DF (lt:DF (match_operand:DF 1 "register_operand" "%r")
+                                (match_operand:DF 2 "register_operand" "r"))
+          (match_dup 1)
+          (match_dup 2)))]
+  "nios2_fpu_insns[nios2_fpu_mindf3].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_mindf3].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "maxsf3"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (if_then_else:SF (lt:SF (match_operand:SF 1 "register_operand" "%r")
+                                (match_operand:SF 2 "register_operand" "r"))
+          (match_dup 2)
+          (match_dup 1)))]
+  "nios2_fpu_insns[nios2_fpu_maxsf3].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_maxsf3].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "maxdf3"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (if_then_else:DF (lt:DF (match_operand:DF 1 "register_operand" "%r")
+                                (match_operand:DF 2 "register_operand" "r"))
+          (match_dup 2)
+          (match_dup 1)))]
+  "nios2_fpu_insns[nios2_fpu_maxdf3].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_maxdf3].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "abssf2"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (abs:SF (match_operand:SF 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_abssf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_abssf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "absdf2"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (abs:DF (match_operand:DF 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_absdf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_absdf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "sqrtsf2"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (sqrt:SF (match_operand:SF 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_sqrtsf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_sqrtsf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "sqrtdf2"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (sqrt:DF (match_operand:DF 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_sqrtdf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_sqrtdf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "cossf2"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (unspec:SF [(match_operand:SF 1 "register_operand" "r")] UNSPEC_FCOSS))]
+  "nios2_fpu_insns[nios2_fpu_cossf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_cossf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "cosdf2"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (unspec:DF [(match_operand:DF 1 "register_operand" "r")] UNSPEC_FCOSD))]
+  "nios2_fpu_insns[nios2_fpu_cosdf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_cosdf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "sinsf2"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (unspec:SF [(match_operand:SF 1 "register_operand" "r")] UNSPEC_FSINS))]
+  "nios2_fpu_insns[nios2_fpu_sinsf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_sinsf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "sindf2"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (unspec:DF [(match_operand:DF 1 "register_operand" "r")] UNSPEC_FSIND))]
+  "nios2_fpu_insns[nios2_fpu_sindf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_sindf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "tansf2"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (unspec:SF [(match_operand:SF 1 "register_operand" "r")] UNSPEC_FTANS))]
+  "nios2_fpu_insns[nios2_fpu_tansf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_tansf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "tandf2"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (unspec:DF [(match_operand:DF 1 "register_operand" "r")] UNSPEC_FTAND))]
+  "nios2_fpu_insns[nios2_fpu_tandf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_tandf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "atansf2"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (unspec:SF [(match_operand:SF 1 "register_operand" "r")] UNSPEC_FATANS))]
+  "nios2_fpu_insns[nios2_fpu_atansf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_atansf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "atandf2"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (unspec:DF [(match_operand:DF 1 "register_operand" "r")] UNSPEC_FATAND))]
+  "nios2_fpu_insns[nios2_fpu_atandf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_atandf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "expsf2"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (unspec:SF [(match_operand:SF 1 "register_operand" "r")] UNSPEC_FEXPS))]
+  "nios2_fpu_insns[nios2_fpu_expsf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_expsf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "expdf2"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (unspec:DF [(match_operand:DF 1 "register_operand" "r")] UNSPEC_FEXPD))]
+  "nios2_fpu_insns[nios2_fpu_expdf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_expdf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "logsf2"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (unspec:SF [(match_operand:SF 1 "register_operand" "r")] UNSPEC_FLOGS))]
+  "nios2_fpu_insns[nios2_fpu_logsf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_logsf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "logdf2"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (unspec:DF [(match_operand:DF 1 "register_operand" "r")] UNSPEC_FLOGD))]
+  "nios2_fpu_insns[nios2_fpu_logdf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_logdf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
+;*****************************************************************************
+;*
+;*  Logical Operantions
+;*
+;*****************************************************************************
 
 (define_insn "andsi3"
   [(set (match_operand:SI 0 "register_operand"         "=r, r,r")
@@ -610,54 +1063,54 @@
 
 (define_insn "ashlsi3"
   [(set (match_operand:SI 0 "register_operand"           "=r,r")
-	(ashift:SI (match_operand:SI 1 "register_operand" "r,r")
-		   (match_operand:SI 2 "shift_operand"    "r,L")))]
+        (ashift:SI (match_operand:SI 1 "register_operand" "r,r")
+                   (match_operand:SI 2 "shift_operand"    "r,L")))]
   ""
 
 {
-	if( GET_CODE ( operands[2] ) == CONST_INT && INTVAL( operands[2] ) == 1 )
-		return "add\t%0,%1,%1";
-	return "sll%i2\t%0,%1,%z2";
+        if( GET_CODE ( operands[2] ) == CONST_INT && INTVAL( operands[2] ) == 1 )
+                return "add\t%0,%1,%1";
+        return "sll%i2\t%0,%1,%z2";
 }
   [(set_attr "type" "shift")])
 
 (define_insn "ashrsi3"
   [(set (match_operand:SI 0 "register_operand"             "=r,r")
-	(ashiftrt:SI (match_operand:SI 1 "register_operand" "r,r")
-		     (match_operand:SI 2 "shift_operand"    "r,L")))]
+        (ashiftrt:SI (match_operand:SI 1 "register_operand" "r,r")
+                     (match_operand:SI 2 "shift_operand"    "r,L")))]
   ""
   "sra%i2\\t%0, %1, %z2"
   [(set_attr "type" "shift")])
 
 (define_insn "lshrsi3"
   [(set (match_operand:SI 0 "register_operand"             "=r,r")
-	(lshiftrt:SI (match_operand:SI 1 "register_operand" "r,r")
-		     (match_operand:SI 2 "shift_operand"    "r,L")))]
+        (lshiftrt:SI (match_operand:SI 1 "register_operand" "r,r")
+                     (match_operand:SI 2 "shift_operand"    "r,L")))]
   ""
   "srl%i2\\t%0, %1, %z2"
   [(set_attr "type" "shift")])
 
 (define_insn "rotlsi3"
   [(set (match_operand:SI 0 "register_operand"           "=r,r")
-	(rotate:SI (match_operand:SI 1 "register_operand" "r,r")
-		   (match_operand:SI 2 "shift_operand"    "r,L")))]
+        (rotate:SI (match_operand:SI 1 "register_operand" "r,r")
+                   (match_operand:SI 2 "shift_operand"    "r,L")))]
   ""
   "rol%i2\\t%0, %1, %z2"
   [(set_attr "type" "shift")])
 
 (define_insn "rotrsi3"
   [(set (match_operand:SI 0 "register_operand"             "=r,r")
-	(rotatert:SI (match_operand:SI 1 "register_operand" "r,r")
-		     (match_operand:SI 2 "register_operand" "r,r")))]
+        (rotatert:SI (match_operand:SI 1 "register_operand" "r,r")
+                     (match_operand:SI 2 "register_operand" "r,r")))]
   ""
   "ror\\t%0, %1, %2"
   [(set_attr "type" "shift")])
 
 (define_insn "*shift_mul_constants"
   [(set (match_operand:SI 0 "register_operand"                     "=r")
-	(ashift:SI (mult:SI (match_operand:SI 1 "register_operand"  "r")
-		            (match_operand:SI 2 "const_int_operand" "I"))
-		   (match_operand:SI 3          "const_int_operand" "I")))]
+        (ashift:SI (mult:SI (match_operand:SI 1 "register_operand"  "r")
+                            (match_operand:SI 2 "const_int_operand" "I"))
+                   (match_operand:SI 3          "const_int_operand" "I")))]
   "TARGET_HAS_MUL && SMALL_INT (INTVAL (operands[2]) << INTVAL (operands[3]))"
 {
   HOST_WIDE_INT mul = INTVAL (operands[2]) << INTVAL (operands[3]);
@@ -671,6 +1124,108 @@
   return "";
 }
   [(set_attr "type" "mul")])
+  
+
+
+
+;*****************************************************************************
+;*
+;* Converting between floating point and fixed point
+;*
+;*****************************************************************************
+(define_insn "floatsisf2"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (float:SF (match_operand:SI 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_floatsisf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_floatsisf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "floatsidf2"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (float:DF (match_operand:SI 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_floatsidf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_floatsidf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "floatunssisf2"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (unsigned_float:SF (match_operand:SI 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_floatunssisf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_floatunssisf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "floatunssidf2"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (unsigned_float:DF (match_operand:SI 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_floatunssidf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_floatunssidf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "fixsfsi2"
+  [(set (match_operand:SI 0 "register_operand" "=r")
+        (fix:SI (match_operand:SF 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_fixsfsi2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_fixsfsi2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "fixdfsi2"
+  [(set (match_operand:SI 0 "register_operand" "=r")
+        (fix:SI (match_operand:DF 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_fixdfsi2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_fixdfsi2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "fixunssfsi2"
+  [(set (match_operand:SI 0 "register_operand" "=r")
+        (unsigned_fix:SI (match_operand:SF 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_fixunssfsi2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_fixunssfsi2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "fixunsdfsi2"
+  [(set (match_operand:SI 0 "register_operand" "=r")
+        (unsigned_fix:SI (match_operand:DF 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_fixunsdfsi2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_fixunsdfsi2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "extendsfdf2"
+  [(set (match_operand:DF 0 "register_operand" "=r")
+        (float_extend:DF (match_operand:SF 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_extendsfdf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_extendsfdf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+(define_insn "truncdfsf2"
+  [(set (match_operand:SF 0 "register_operand" "=r")
+        (float_truncate:SF (match_operand:DF 1 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_truncdfsf2].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_truncdfsf2].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
+
+
 
 
 
@@ -802,9 +1357,9 @@
 
 (define_expand "sibcall"
   [(parallel [(call (match_operand 0 "" "")
-		    (match_operand 1 "" ""))
-	      (return)
-	      (use (match_operand 2 "" ""))])]
+                    (match_operand 1 "" ""))
+              (return)
+              (use (match_operand 2 "" ""))])]
   ""
   {
     XEXP (operands[0], 0) = copy_to_mode_reg (SImode, XEXP (operands[0], 0));
@@ -816,10 +1371,10 @@
 
 (define_expand "sibcall_value"
   [(parallel [(set (match_operand 0 "" "")
-		   (call (match_operand 1 "" "")
-			 (match_operand 2 "" "")))
-	      (return)
-	      (use (match_operand 3 "" ""))])]
+                   (call (match_operand 1 "" "")
+                         (match_operand 2 "" "")))
+              (return)
+              (use (match_operand 3 "" ""))])]
   ""
   {
     XEXP (operands[1], 0) = copy_to_mode_reg (SImode, XEXP (operands[1], 0));
@@ -831,7 +1386,7 @@
 
 (define_insn "sibcall_insn"
  [(call (mem:QI (match_operand:SI 0 "register_operand" "D08"))
-	(match_operand 1 "" ""))
+        (match_operand 1 "" ""))
   (return)
   (use (match_operand 2 "" ""))]
   ""
@@ -841,7 +1396,7 @@
 (define_insn "sibcall_value_insn"
  [(set (match_operand 0 "register_operand" "")
        (call (mem:QI (match_operand:SI 1 "register_operand" "D08"))
-	     (match_operand 2 "" "")))
+             (match_operand 2 "" "")))
   (return)
   (use (match_operand 3 "" ""))]
   ""
@@ -860,7 +1415,7 @@
 
 (define_insn "*tablejump"
   [(set (pc)
-	(match_operand:SI 0 "register_operand" "r"))
+        (match_operand:SI 0 "register_operand" "r"))
    (use (label_ref (match_operand 1 "" "")))]
   ""
   "jmp\\t%0"
@@ -875,24 +1430,24 @@
 ;*****************************************************************************
 ;; Flow here is rather complex (based on MIPS):
 ;;
-;;  1)	The cmp{si,di,sf,df} routine is called.  It deposits the
-;;	arguments into the branch_cmp array, and the type into
-;;	branch_type.  No RTL is generated.
+;;  1)  The cmp{si,di,sf,df} routine is called.  It deposits the
+;;      arguments into the branch_cmp array, and the type into
+;;      branch_type.  No RTL is generated.
 ;;
-;;  2)	The appropriate branch define_expand is called, which then
-;;	creates the appropriate RTL for the comparison and branch.
-;;	Different CC modes are used, based on what type of branch is
-;;	done, so that we can constrain things appropriately.  There
-;;	are assumptions in the rest of GCC that break if we fold the
-;;	operands into the branchs for integer operations, and use cc0
-;;	for floating point, so we use the fp status register instead.
-;;	If needed, an appropriate temporary is created to hold the
-;;	of the integer compare.
+;;  2)  The appropriate branch define_expand is called, which then
+;;      creates the appropriate RTL for the comparison and branch.
+;;      Different CC modes are used, based on what type of branch is
+;;      done, so that we can constrain things appropriately.  There
+;;      are assumptions in the rest of GCC that break if we fold the
+;;      operands into the branchs for integer operations, and use cc0
+;;      for floating point, so we use the fp status register instead.
+;;      If needed, an appropriate temporary is created to hold the
+;;      of the integer compare.
 
 (define_expand "cmpsi"
   [(set (cc0)
-	(compare:CC (match_operand:SI 0 "register_operand" "")
-		    (match_operand:SI 1 "arith_operand" "")))]
+        (compare:CC (match_operand:SI 0 "register_operand" "")
+                    (match_operand:SI 1 "arith_operand" "")))]
   ""
 {
   branch_cmp[0] = operands[0];
@@ -903,12 +1458,46 @@
 
 (define_expand "tstsi"
   [(set (cc0)
-	(match_operand:SI 0 "register_operand" ""))]
+        (match_operand:SI 0 "register_operand" ""))]
   ""
 {
   branch_cmp[0] = operands[0];
   branch_cmp[1] = const0_rtx;
   branch_type = CMP_SI;
+  DONE;
+})
+
+(define_expand "cmpsf"
+  [(set (cc0)
+        (compare:CC (match_operand:SF 0 "register_operand" "")
+                    (match_operand:SF 1 "register_operand" "")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_sltsf].N >= 0
+   && nios2_fpu_insns[nios2_fpu_nios2_slesf].N >= 0
+   && nios2_fpu_insns[nios2_fpu_nios2_seqsf].N >= 0
+   && nios2_fpu_insns[nios2_fpu_nios2_snesf].N >= 0
+   && nios2_fpu_insns[nios2_fpu_nios2_sgesf].N >= 0
+   && nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N >= 0"
+{
+  branch_cmp[0] = operands[0];
+  branch_cmp[1] = operands[1];
+  branch_type = CMP_SF;
+  DONE;
+})
+
+(define_expand "cmpdf"
+  [(set (cc0)
+        (compare:CC (match_operand:DF 0 "register_operand" "")
+                    (match_operand:DF 1 "register_operand" "")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_sltdf].N >= 0
+   && nios2_fpu_insns[nios2_fpu_nios2_sledf].N >= 0
+   && nios2_fpu_insns[nios2_fpu_nios2_seqdf].N >= 0
+   && nios2_fpu_insns[nios2_fpu_nios2_snedf].N >= 0
+   && nios2_fpu_insns[nios2_fpu_nios2_sgedf].N >= 0
+   && nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N >= 0"
+{
+  branch_cmp[0] = operands[0];
+  branch_cmp[1] = operands[1];
+  branch_type = CMP_DF;
   DONE;
 })
 
@@ -921,11 +1510,11 @@
 
 (define_expand "seq"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(eq:SI (match_dup 1)
-	       (match_dup 2)))]
+        (eq:SI (match_dup 1)
+               (match_dup 2)))]
   ""
 {
-  if (branch_type != CMP_SI)
+  if (branch_type != CMP_SI && branch_type != CMP_SF && branch_type != CMP_DF)
     FAIL;
 
   /* set up operands from compare.  */
@@ -939,20 +1528,42 @@
 
 (define_insn "*seq"
   [(set (match_operand:SI 0 "register_operand"        "=r")
-	(eq:SI (match_operand:SI 1 "reg_or_0_operand" "%rM")
-	       (match_operand:SI 2 "arith_operand"     "rI")))]
+        (eq:SI (match_operand:SI 1 "reg_or_0_operand" "%rM")
+               (match_operand:SI 2 "arith_operand"     "rI")))]
   ""
   "cmpeq%i2\\t%0, %z1, %z2"
   [(set_attr "type" "alu")])
 
 
+(define_insn "nios2_seqsf"
+  [(set (match_operand:SI 0 "register_operand"        "=r")
+        (eq:SI (match_operand:SF 1 "register_operand" "%r")
+               (match_operand:SF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_seqsf].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_seqsf].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
+(define_insn "nios2_seqdf"
+  [(set (match_operand:SI 0 "register_operand"        "=r")
+        (eq:SI (match_operand:DF 1 "register_operand" "%r")
+               (match_operand:DF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_seqdf].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_seqdf].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
 (define_expand "sne"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(ne:SI (match_dup 1)
-	       (match_dup 2)))]
+        (ne:SI (match_dup 1)
+               (match_dup 2)))]
   ""
 {
-  if (branch_type != CMP_SI)
+  if (branch_type != CMP_SI && branch_type != CMP_SF && branch_type != CMP_DF)
     FAIL;
 
   /* set up operands from compare.  */
@@ -966,20 +1577,42 @@
 
 (define_insn "*sne"
   [(set (match_operand:SI 0 "register_operand"        "=r")
-	(ne:SI (match_operand:SI 1 "reg_or_0_operand" "%rM")
-	       (match_operand:SI 2 "arith_operand"     "rI")))]
+        (ne:SI (match_operand:SI 1 "reg_or_0_operand" "%rM")
+               (match_operand:SI 2 "arith_operand"     "rI")))]
   ""
   "cmpne%i2\\t%0, %z1, %z2"
   [(set_attr "type" "alu")])
 
 
+(define_insn "nios2_snesf"
+  [(set (match_operand:SI 0 "register_operand"        "=r")
+        (ne:SI (match_operand:SF 1 "register_operand" "%r")
+               (match_operand:SF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_snesf].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_snesf].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
+(define_insn "nios2_snedf"
+  [(set (match_operand:SI 0 "register_operand"        "=r")
+        (ne:SI (match_operand:DF 1 "register_operand" "%r")
+               (match_operand:DF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_snedf].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_snedf].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
 (define_expand "sgt"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(gt:SI (match_dup 1)
-	       (match_dup 2)))]
+        (gt:SI (match_dup 1)
+               (match_dup 2)))]
   ""
 {
-  if (branch_type != CMP_SI)
+  if (branch_type != CMP_SI && branch_type != CMP_SF && branch_type != CMP_DF)
     FAIL;
 
   /* set up operands from compare.  */
@@ -993,20 +1626,42 @@
 
 (define_insn "*sgt"
   [(set (match_operand:SI 0 "register_operand"        "=r")
-	(gt:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
-	       (match_operand:SI 2 "reg_or_0_operand"  "rM")))]
+        (gt:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
+               (match_operand:SI 2 "reg_or_0_operand"  "rM")))]
   ""
   "cmplt\\t%0, %z2, %z1"
   [(set_attr "type" "alu")])
 
 
+(define_insn "nios2_sgtsf"
+  [(set (match_operand:SI 0 "register_operand"        "=r")
+        (gt:SI (match_operand:SF 1 "register_operand" "r")
+               (match_operand:SF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_sgtsf].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
+(define_insn "nios2_sgtdf"
+  [(set (match_operand:SI 0 "register_operand"        "=r")
+        (gt:SI (match_operand:DF 1 "register_operand" "r")
+               (match_operand:DF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_sgtdf].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
 (define_expand "sge"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(ge:SI (match_dup 1)
-	       (match_dup 2)))]
+        (ge:SI (match_dup 1)
+               (match_dup 2)))]
   ""
 {
-  if (branch_type != CMP_SI)
+  if (branch_type != CMP_SI && branch_type != CMP_SF && branch_type != CMP_DF)
     FAIL;
 
   /* set up operands from compare.  */
@@ -1020,19 +1675,42 @@
 
 (define_insn "*sge"
   [(set (match_operand:SI 0 "register_operand"        "=r")
-	(ge:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
-	       (match_operand:SI 2 "arith_operand"     "rI")))]
+        (ge:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
+               (match_operand:SI 2 "arith_operand"     "rI")))]
   ""
   "cmpge%i2\\t%0, %z1, %z2"
   [(set_attr "type" "alu")])
 
+
+(define_insn "nios2_sgesf"
+  [(set (match_operand:SI 0 "register_operand"        "=r")
+        (ge:SI (match_operand:SF 1 "register_operand" "r")
+               (match_operand:SF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_sgesf].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_sgesf].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
+(define_insn "nios2_sgedf"
+  [(set (match_operand:SI 0 "register_operand"        "=r")
+        (ge:SI (match_operand:DF 1 "register_operand" "r")
+               (match_operand:DF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_sgedf].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_sgedf].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
 (define_expand "sle"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(le:SI (match_dup 1)
-	       (match_dup 2)))]
+        (le:SI (match_dup 1)
+               (match_dup 2)))]
   ""
 {
-  if (branch_type != CMP_SI)
+  if (branch_type != CMP_SI && branch_type != CMP_SF && branch_type != CMP_DF)
     FAIL;
 
   /* set up operands from compare.  */
@@ -1046,20 +1724,42 @@
 
 (define_insn "*sle"
   [(set (match_operand:SI 0 "register_operand"        "=r")
-	(le:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
-	       (match_operand:SI 2 "reg_or_0_operand"  "rM")))]
+        (le:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
+               (match_operand:SI 2 "reg_or_0_operand"  "rM")))]
   ""
   "cmpge\\t%0, %z2, %z1"
   [(set_attr "type" "alu")])
 
 
+(define_insn "nios2_slesf"
+  [(set (match_operand:SI 0 "register_operand"        "=r")
+        (le:SI (match_operand:SF 1 "register_operand" "r")
+               (match_operand:SF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_slesf].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_slesf].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
+(define_insn "nios2_sledf"
+  [(set (match_operand:SI 0 "register_operand"        "=r")
+        (le:SI (match_operand:DF 1 "register_operand" "r")
+               (match_operand:DF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_sledf].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_sledf].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
 (define_expand "slt"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(lt:SI (match_dup 1)
-	       (match_dup 2)))]
+        (lt:SI (match_dup 1)
+               (match_dup 2)))]
   ""
 {
-  if (branch_type != CMP_SI)
+  if (branch_type != CMP_SI && branch_type != CMP_SF && branch_type != CMP_DF)
     FAIL;
 
   /* set up operands from compare.  */
@@ -1073,17 +1773,39 @@
 
 (define_insn "*slt"
   [(set (match_operand:SI 0 "register_operand"        "=r")
-	(lt:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
-	       (match_operand:SI 2 "arith_operand"     "rI")))]
+        (lt:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
+               (match_operand:SI 2 "arith_operand"     "rI")))]
   ""
   "cmplt%i2\\t%0, %z1, %z2"
   [(set_attr "type" "alu")])
 
 
+(define_insn "nios2_sltsf"
+  [(set (match_operand:SI 0 "register_operand"        "=r")
+        (lt:SI (match_operand:SF 1 "register_operand" "r")
+               (match_operand:SF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_sltsf].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_sltsf].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
+(define_insn "nios2_sltdf"
+  [(set (match_operand:SI 0 "register_operand"        "=r")
+        (lt:SI (match_operand:DF 1 "register_operand" "r")
+               (match_operand:DF 2 "register_operand" "r")))]
+  "nios2_fpu_insns[nios2_fpu_nios2_sltdf].N >= 0"
+  {
+    return (*nios2_fpu_insns[nios2_fpu_nios2_sltdf].output) (insn);
+  }
+  [(set_attr "type" "custom")])
+
+
 (define_expand "sgtu"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(gtu:SI (match_dup 1)
-	        (match_dup 2)))]
+        (gtu:SI (match_dup 1)
+                (match_dup 2)))]
   ""
 {
   if (branch_type != CMP_SI)
@@ -1100,8 +1822,8 @@
 
 (define_insn "*sgtu"
   [(set (match_operand:SI 0 "register_operand"        "=r")
-	(gtu:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
-	        (match_operand:SI 2 "reg_or_0_operand"  "rM")))]
+        (gtu:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
+                (match_operand:SI 2 "reg_or_0_operand"  "rM")))]
   ""
   "cmpltu\\t%0, %z2, %z1"
   [(set_attr "type" "alu")])
@@ -1109,8 +1831,8 @@
 
 (define_expand "sgeu"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(geu:SI (match_dup 1)
-	        (match_dup 2)))]
+        (geu:SI (match_dup 1)
+                (match_dup 2)))]
   ""
 {
   if (branch_type != CMP_SI)
@@ -1127,16 +1849,16 @@
 
 (define_insn "*sgeu"
   [(set (match_operand:SI 0 "register_operand"        "=r")
-	(geu:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
-	        (match_operand:SI 2 "uns_arith_operand"     "rJ")))]
+        (geu:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
+                (match_operand:SI 2 "uns_arith_operand"     "rJ")))]
   ""
   "cmpgeu%i2\\t%0, %z1, %z2"
   [(set_attr "type" "alu")])
 
 (define_expand "sleu"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(leu:SI (match_dup 1)
-	        (match_dup 2)))]
+        (leu:SI (match_dup 1)
+                (match_dup 2)))]
   ""
 {
   if (branch_type != CMP_SI)
@@ -1153,8 +1875,8 @@
 
 (define_insn "*sleu"
   [(set (match_operand:SI 0 "register_operand"        "=r")
-	(leu:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
-	        (match_operand:SI 2 "reg_or_0_operand"  "rM")))]
+        (leu:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
+                (match_operand:SI 2 "reg_or_0_operand"  "rM")))]
   ""
   "cmpgeu\\t%0, %z2, %z1"
   [(set_attr "type" "alu")])
@@ -1162,8 +1884,8 @@
 
 (define_expand "sltu"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(ltu:SI (match_dup 1)
-	        (match_dup 2)))]
+        (ltu:SI (match_dup 1)
+                (match_dup 2)))]
   ""
 {
   if (branch_type != CMP_SI)
@@ -1180,8 +1902,8 @@
 
 (define_insn "*sltu"
   [(set (match_operand:SI 0 "register_operand"        "=r")
-	(ltu:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
-	        (match_operand:SI 2 "uns_arith_operand"     "rJ")))]
+        (ltu:SI (match_operand:SI 1 "reg_or_0_operand"  "rM")
+                (match_operand:SI 2 "uns_arith_operand"     "rJ")))]
   ""
   "cmpltu%i2\\t%0, %z1, %z2"
   [(set_attr "type" "alu")])
@@ -1197,10 +1919,10 @@
 
 (define_insn "*cbranch"
   [(set (pc)
-	(if_then_else
+        (if_then_else
          (match_operator:SI 0 "comparison_operator"
-			    [(match_operand:SI 2 "reg_or_0_operand" "rM")
-			     (match_operand:SI 3 "reg_or_0_operand" "rM")])
+                            [(match_operand:SI 2 "reg_or_0_operand" "rM")
+                             (match_operand:SI 3 "reg_or_0_operand" "rM")])
         (label_ref (match_operand 1 "" ""))
         (pc)))]
   ""
@@ -1208,12 +1930,42 @@
   [(set_attr "type" "control")])
 
 
+(define_insn "nios2_cbranch_sf"
+  [(set (pc)
+        (if_then_else
+         (match_operator:SI 0 "comparison_operator"
+                            [(match_operand:SF 2 "register_operand" "r")
+                             (match_operand:SF 3 "register_operand" "r")])
+        (label_ref (match_operand 1 "" ""))
+        (pc)))]
+  ""
+  {
+    return nios2_output_fpu_insn_cmps (insn, GET_CODE (operands[0]));
+  }
+  [(set_attr "type" "custom")])
+
+
+(define_insn "nios2_cbranch_df"
+  [(set (pc)
+        (if_then_else
+         (match_operator:SI 0 "comparison_operator"
+                            [(match_operand:DF 2 "register_operand" "r")
+                             (match_operand:DF 3 "register_operand" "r")])
+        (label_ref (match_operand 1 "" ""))
+        (pc)))]
+  ""
+  {
+    return nios2_output_fpu_insn_cmpd (insn, GET_CODE (operands[0]));
+  }
+  [(set_attr "type" "custom")])
+
+
 (define_expand "beq"
   [(set (pc)
-	(if_then_else (eq:CC (cc0)
-			     (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
+        (if_then_else (eq:CC (cc0)
+                             (const_int 0))
+                      (label_ref (match_operand 0 "" ""))
+                      (pc)))]
   ""
 {
   gen_int_relational (EQ, NULL_RTX, branch_cmp[0], branch_cmp[1], operands[0]);
@@ -1223,10 +1975,10 @@
 
 (define_expand "bne"
   [(set (pc)
-	(if_then_else (ne:CC (cc0)
-			     (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
+        (if_then_else (ne:CC (cc0)
+                             (const_int 0))
+                      (label_ref (match_operand 0 "" ""))
+                      (pc)))]
   ""
 {
   gen_int_relational (NE, NULL_RTX, branch_cmp[0], branch_cmp[1], operands[0]);
@@ -1236,10 +1988,10 @@
 
 (define_expand "bgt"
   [(set (pc)
-	(if_then_else (gt:CC (cc0)
-			     (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
+        (if_then_else (gt:CC (cc0)
+                             (const_int 0))
+                      (label_ref (match_operand 0 "" ""))
+                      (pc)))]
   ""
 {
   gen_int_relational (GT, NULL_RTX, branch_cmp[0], branch_cmp[1], operands[0]);
@@ -1248,10 +2000,10 @@
 
 (define_expand "bge"
   [(set (pc)
-	(if_then_else (ge:CC (cc0)
-			     (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
+        (if_then_else (ge:CC (cc0)
+                             (const_int 0))
+                      (label_ref (match_operand 0 "" ""))
+                      (pc)))]
   ""
 {
   gen_int_relational (GE, NULL_RTX, branch_cmp[0], branch_cmp[1], operands[0]);
@@ -1260,10 +2012,10 @@
 
 (define_expand "ble"
   [(set (pc)
-	(if_then_else (le:CC (cc0)
-			     (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
+        (if_then_else (le:CC (cc0)
+                             (const_int 0))
+                      (label_ref (match_operand 0 "" ""))
+                      (pc)))]
   ""
 {
   gen_int_relational (LE, NULL_RTX, branch_cmp[0], branch_cmp[1], operands[0]);
@@ -1272,10 +2024,10 @@
 
 (define_expand "blt"
   [(set (pc)
-	(if_then_else (lt:CC (cc0)
-			     (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
+        (if_then_else (lt:CC (cc0)
+                             (const_int 0))
+                      (label_ref (match_operand 0 "" ""))
+                      (pc)))]
   ""
 {
   gen_int_relational (LT, NULL_RTX, branch_cmp[0], branch_cmp[1], operands[0]);
@@ -1285,10 +2037,10 @@
 
 (define_expand "bgtu"
   [(set (pc)
-	(if_then_else (gtu:CC (cc0)
-		 	      (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
+        (if_then_else (gtu:CC (cc0)
+                              (const_int 0))
+                      (label_ref (match_operand 0 "" ""))
+                      (pc)))]
   ""
 {
   gen_int_relational (GTU, NULL_RTX, branch_cmp[0], branch_cmp[1], operands[0]);
@@ -1297,10 +2049,10 @@
 
 (define_expand "bgeu"
   [(set (pc)
-	(if_then_else (geu:CC (cc0)
-			      (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
+        (if_then_else (geu:CC (cc0)
+                              (const_int 0))
+                      (label_ref (match_operand 0 "" ""))
+                      (pc)))]
   ""
 {
   gen_int_relational (GEU, NULL_RTX, branch_cmp[0], branch_cmp[1], operands[0]);
@@ -1309,10 +2061,10 @@
 
 (define_expand "bleu"
   [(set (pc)
-	(if_then_else (leu:CC (cc0)
-			      (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
+        (if_then_else (leu:CC (cc0)
+                              (const_int 0))
+                      (label_ref (match_operand 0 "" ""))
+                      (pc)))]
   ""
 {
   gen_int_relational (LEU, NULL_RTX, branch_cmp[0], branch_cmp[1], operands[0]);
@@ -1321,10 +2073,10 @@
 
 (define_expand "bltu"
   [(set (pc)
-	(if_then_else (ltu:CC (cc0)
-			      (const_int 0))
-		      (label_ref (match_operand 0 "" ""))
-		      (pc)))]
+        (if_then_else (ltu:CC (cc0)
+                              (const_int 0))
+                      (label_ref (match_operand 0 "" ""))
+                      (pc)))]
   ""
 {
   gen_int_relational (LTU, NULL_RTX, branch_cmp[0], branch_cmp[1], operands[0]);
@@ -1361,12 +2113,12 @@
 
 (define_expand "movstrsi"
   [(parallel [(set (match_operand:BLK 0 "general_operand"  "")
-		   (match_operand:BLK 1 "general_operand"  ""))
-	      (use (match_operand:SI 2 "const_int_operand" ""))
-	      (use (match_operand:SI 3 "const_int_operand" ""))
-	      (clobber (match_scratch:SI 4                "=&r"))
-	      (clobber (match_scratch:SI 5                "=&r"))
-	      (clobber (match_scratch:SI 6                "=&r"))])]
+                   (match_operand:BLK 1 "general_operand"  ""))
+              (use (match_operand:SI 2 "const_int_operand" ""))
+              (use (match_operand:SI 3 "const_int_operand" ""))
+              (clobber (match_scratch:SI 4                "=&r"))
+              (clobber (match_scratch:SI 5                "=&r"))
+              (clobber (match_scratch:SI 6                "=&r"))])]
   "TARGET_INLINE_MEMCPY"
 {
   rtx ld_addr_reg, st_addr_reg;
@@ -1390,12 +2142,12 @@
 
   st_addr_reg
     = replace_equiv_address (operands[0],
-			     copy_to_mode_reg (Pmode, XEXP (operands[0], 0)));
+                             copy_to_mode_reg (Pmode, XEXP (operands[0], 0)));
   ld_addr_reg
     = replace_equiv_address (operands[1],
-			     copy_to_mode_reg (Pmode, XEXP (operands[1], 0)));
+                             copy_to_mode_reg (Pmode, XEXP (operands[1], 0)));
   emit_insn (gen_movstrsi_internal (st_addr_reg, ld_addr_reg,
-				    operands[2], operands[3]));
+                                    operands[2], operands[3]));
 
   DONE;
 })
@@ -1403,7 +2155,7 @@
 
 (define_insn "movstrsi_internal"
   [(set (match_operand:BLK 0 "memory_operand"   "=o")
-	(match_operand:BLK 1 "memory_operand"    "o"))
+        (match_operand:BLK 1 "memory_operand"    "o"))
    (use (match_operand:SI 2 "const_int_operand"  "i"))
    (use (match_operand:SI 3 "const_int_operand"  "i"))
    (clobber (match_scratch:SI 4                "=&r"))
@@ -1434,18 +2186,18 @@
          storing */
       if (delay_count >= 3)
         {
-	  ops[0] = gen_rtx (MEM, SImode, 
-			    plus_constant (st_addr_reg, st_len - st_offset));
-	  ops[1] = operands[st_reg + 4];			 
-	  output_asm_insn ("stw\t%1, %0", ops);
-	  
-	  st_reg = (st_reg + 1) % 3;
-	  st_offset -= 4;
+          ops[0] = gen_rtx (MEM, SImode, 
+                            plus_constant (st_addr_reg, st_len - st_offset));
+          ops[1] = operands[st_reg + 4];                         
+          output_asm_insn ("stw\t%1, %0", ops);
+          
+          st_reg = (st_reg + 1) % 3;
+          st_offset -= 4;
         }
     
       ops[0] = gen_rtx (MEM, SImode, 
-			plus_constant (ld_addr_reg, ld_len - ld_offset));
-      ops[1] = operands[ld_reg + 4];			 
+                        plus_constant (ld_addr_reg, ld_len - ld_offset));
+      ops[1] = operands[ld_reg + 4];                     
       output_asm_insn ("ldw\t%1, %0", ops);
       
       ld_reg = (ld_reg + 1) % 3;
@@ -1459,18 +2211,18 @@
          storing */
       if (delay_count >= 3)
         {
-	  ops[0] = gen_rtx (MEM, SImode, 
-			    plus_constant (st_addr_reg, st_len - st_offset));
-	  ops[1] = operands[st_reg + 4];			 
-	  output_asm_insn ("stw\t%1, %0", ops);
-	  
-	  st_reg = (st_reg + 1) % 3;
-	  st_offset -= 4;
+          ops[0] = gen_rtx (MEM, SImode, 
+                            plus_constant (st_addr_reg, st_len - st_offset));
+          ops[1] = operands[st_reg + 4];                         
+          output_asm_insn ("stw\t%1, %0", ops);
+          
+          st_reg = (st_reg + 1) % 3;
+          st_offset -= 4;
         }
     
       ops[0] = gen_rtx (MEM, HImode, 
-			plus_constant (ld_addr_reg, ld_len - ld_offset));
-      ops[1] = operands[ld_reg + 4];			 
+                        plus_constant (ld_addr_reg, ld_len - ld_offset));
+      ops[1] = operands[ld_reg + 4];                     
       output_asm_insn ("ldh\t%1, %0", ops);
       
       ld_reg = (ld_reg + 1) % 3;
@@ -1484,18 +2236,18 @@
          storing */
       if (delay_count >= 3)
         {
-	  ops[0] = gen_rtx (MEM, SImode, 
-			    plus_constant (st_addr_reg, st_len - st_offset));
-	  ops[1] = operands[st_reg + 4];			 
-	  output_asm_insn ("stw\t%1, %0", ops);
-	  
-	  st_reg = (st_reg + 1) % 3;
-	  st_offset -= 4;
+          ops[0] = gen_rtx (MEM, SImode, 
+                            plus_constant (st_addr_reg, st_len - st_offset));
+          ops[1] = operands[st_reg + 4];                         
+          output_asm_insn ("stw\t%1, %0", ops);
+          
+          st_reg = (st_reg + 1) % 3;
+          st_offset -= 4;
         }
     
       ops[0] = gen_rtx (MEM, QImode, 
-			plus_constant (ld_addr_reg, ld_len - ld_offset));
-      ops[1] = operands[ld_reg + 4];			 
+                        plus_constant (ld_addr_reg, ld_len - ld_offset));
+      ops[1] = operands[ld_reg + 4];                     
       output_asm_insn ("ldb\t%1, %0", ops);
       
       ld_reg = (ld_reg + 1) % 3;
@@ -1505,35 +2257,35 @@
 
     while (st_offset >= 4)
       {
-	ops[0] = gen_rtx (MEM, SImode, 
-			  plus_constant (st_addr_reg, st_len - st_offset));
-	ops[1] = operands[st_reg + 4];			 
-	output_asm_insn ("stw\t%1, %0", ops);
+        ops[0] = gen_rtx (MEM, SImode, 
+                          plus_constant (st_addr_reg, st_len - st_offset));
+        ops[1] = operands[st_reg + 4];                   
+        output_asm_insn ("stw\t%1, %0", ops);
 
-	st_reg = (st_reg + 1) % 3;
-	st_offset -= 4;
+        st_reg = (st_reg + 1) % 3;
+        st_offset -= 4;
       }
   
     while (st_offset >= 2)
       {
-	ops[0] = gen_rtx (MEM, HImode, 
-			  plus_constant (st_addr_reg, st_len - st_offset));
-	ops[1] = operands[st_reg + 4];			 
-	output_asm_insn ("sth\t%1, %0", ops);
+        ops[0] = gen_rtx (MEM, HImode, 
+                          plus_constant (st_addr_reg, st_len - st_offset));
+        ops[1] = operands[st_reg + 4];                   
+        output_asm_insn ("sth\t%1, %0", ops);
 
-	st_reg = (st_reg + 1) % 3;
-	st_offset -= 2;
+        st_reg = (st_reg + 1) % 3;
+        st_offset -= 2;
       }
   
     while (st_offset >= 1)
       {
-	ops[0] = gen_rtx (MEM, QImode, 
-			  plus_constant (st_addr_reg, st_len - st_offset));
-	ops[1] = operands[st_reg + 4];			 
-	output_asm_insn ("stb\t%1, %0", ops);
+        ops[0] = gen_rtx (MEM, QImode, 
+                          plus_constant (st_addr_reg, st_len - st_offset));
+        ops[1] = operands[st_reg + 4];                   
+        output_asm_insn ("stb\t%1, %0", ops);
 
-	st_reg = (st_reg + 1) % 3;
-	st_offset -= 1;
+        st_reg = (st_reg + 1) % 3;
+        st_offset -= 1;
       }
   
   return "";
@@ -2077,7 +2829,7 @@
 
 (define_insn "rdctl"
   [(set (match_operand:SI 0 "register_operand" "=r")
-	(unspec_volatile:SI [(match_operand:SI 1 "rdwrctl_operand" "O")] UNSPEC_RDCTL))]
+        (unspec_volatile:SI [(match_operand:SI 1 "rdwrctl_operand" "O")] UNSPEC_RDCTL))]
   ""
   "rdctl\\t%0, ctl%1"
   [(set_attr "type" "control")])
@@ -2110,3 +2862,6 @@
 ;*****************************************************************************
 
 
+;; Local Variables:
+;; mode: lisp
+;; End:

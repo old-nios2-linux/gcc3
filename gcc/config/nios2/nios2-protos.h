@@ -28,7 +28,7 @@ extern int nios2_can_use_return_insn (void);
 extern void expand_prologue (void);
 extern void expand_epilogue (bool);
 extern void function_profiler (FILE *, int);
-extern enum reg_class reg_class_from_constraint (char, char *);
+extern enum reg_class reg_class_from_constraint (char, const char *);
 extern void nios2_register_target_pragmas (void);
 
 #ifdef RTX_CODE
@@ -53,16 +53,23 @@ extern int equality_op (rtx, enum machine_mode);
 extern int custom_insn_opcode (rtx, enum machine_mode);
 extern int rdwrctl_operand (rtx, enum machine_mode);
 
+/* custom fpu instruction output */
+extern const char *nios2_output_fpu_insn_cmps (rtx, enum rtx_code);
+extern const char *nios2_output_fpu_insn_cmpd (rtx, enum rtx_code);
+
 # ifdef HAVE_MACHINE_MODES
 #  if defined TREE_CODE
-extern void function_arg_advance (CUMULATIVE_ARGS *, enum machine_mode, tree, int);
 extern rtx function_arg (const CUMULATIVE_ARGS *, enum machine_mode, tree, int);
+extern int nios2_must_pass_in_stack (enum machine_mode, tree);
 extern int function_arg_partial_nregs (const CUMULATIVE_ARGS *, enum machine_mode, tree, int);
+extern void function_arg_advance (CUMULATIVE_ARGS *, enum machine_mode, tree, int);
+extern int nios2_function_arg_padding (enum machine_mode, tree);
+extern int nios2_block_reg_padding (enum machine_mode, tree, int);
 extern void init_cumulative_args (CUMULATIVE_ARGS *, tree, rtx, tree, int);
 extern int nios2_setup_incoming_varargs (const CUMULATIVE_ARGS *, enum machine_mode, tree, int);
 
 #  endif /* TREE_CODE */
-# endif	/* HAVE_MACHINE_MODES */
+# endif /* HAVE_MACHINE_MODES */
 #endif
 
 #ifdef TREE_CODE
