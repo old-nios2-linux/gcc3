@@ -609,8 +609,8 @@ install-headers:
 
 install-pch:
 	$(mkinstalldirs) $(DESTDIR)${gxx_include_dir}/${pch_output_builddir}
-	for file in ${pch_output_builddir}/*; do \
-	  $(INSTALL_DATA) $$file $(DESTDIR)${gxx_include_dir}/${pch_output_builddir}; done
+	for file in $(wildcard ${pch_output_builddir}/*); do \
+	  $(INSTALL_DATA) $${file} $(DESTDIR)${gxx_include_dir}/${pch_output_builddir}; done
 
 # By adding these files here, automake will remove them for 'make clean'
 CLEANFILES = ${pch_input} ${pch_output_builddir}/*

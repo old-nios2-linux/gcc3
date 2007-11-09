@@ -91,10 +91,11 @@ $(T)crtn.o: $(srcdir)/config/nios2/crtn.asm $(GCC_PASSES)
 ## libraries are not created on a Solaris build. All other library 
 ## combinations are created by default.
 
-#By default, avoid building big endian libraries during a Windows build.
-ifeq ($(DEV_HOST_OS), win32)
-BUILD_BE_MULTILIB ?= 0
-endif
+# Uncomment to temporarily avoid building big endian and profiling libraries during a Windows build.
+#ifeq ($(DEV_HOST_OS), win32)
+#BUILD_BE_MULTILIB ?= 0
+#BUILD_PG_MULTILIB ?= 0
+#endif
 
 #By default, avoid building the profiling libraries during a Solaris build.
 ifeq ($(DEV_HOST_OS), solaris)
@@ -103,6 +104,9 @@ endif
 
 BUILD_BE_MULTILIB ?= 1
 BUILD_PG_MULTILIB ?= 1
+BUILD_MULTILIB ?= 1
+
+ifeq ($(BUILD_MULTILIB), 1)
 
 MULTILIB_OPTIONS = mno-hw-mul mhw-mulx mstack-check mcustom-fpu-cfg=60-1 mcustom-fpu-cfg=60-2
 
@@ -114,6 +118,8 @@ endif
 #Add the big endian flag to the multilib variable if required
 ifeq ($(BUILD_BE_MULTILIB), 1)
 MULTILIB_OPTIONS += EB/EL
+endif
+
 endif
 
 ## MULTILIB_DIRNAMES
@@ -136,9 +142,10 @@ endif
 ## form option=option to describe all relevant synonyms.  For example,
 ## m68000=mc68000 m68020=mc68020.
 
-
+ifeq ($(BUILD_MULTILIB), 1)
 ifeq ($(BUILD_BE_MULTILIB), 1)
 MULTILIB_MATCHES = EL=mel EB=meb
+endif
 endif
 
 ##
@@ -155,7 +162,9 @@ endif
 ## *mcall-aix/*fleading-underscore* *mlittle/*mcall-aix*
 ##
 
+ifeq ($(BUILD_MULTILIB), 1)
 MULTILIB_EXCEPTIONS = *mno-hw-mul/*mhw-mulx* *mcustom-fpu-cfg=60-1/*mcustom-fpu-cfg=60-2*
+endif
 
 ##
 ## MULTILIB_EXTRA_OPTS Sometimes it is desirable that when building
