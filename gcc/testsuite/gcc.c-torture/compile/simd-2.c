@@ -1,4 +1,4 @@
-typedef float floatvect2 __attribute__((mode(V2SF)));
+typedef float floatvect2 __attribute__((mode(V2SF))); /* { dg-error "unable to emulate" "" { target nios2-*-* } } */
 
 typedef union
 {

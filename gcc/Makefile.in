@@ -849,7 +849,7 @@ OBJS-common = \
  genrtl.o ggc-common.o global.o graph.o gtype-desc.o			   \
  haifa-sched.o hooks.o ifcvt.o insn-attrtab.o insn-emit.o insn-modes.o	   \
  insn-extract.o insn-opinit.o insn-output.o insn-peep.o insn-recog.o	   \
- integrate.o intl.o jump.o  langhooks.o lcm.o lists.o local-alloc.o  	   \
+ integrate.o intl.o jump.o  langhooks.o lcm.o lists.o local-alloc.o	   \
  loop.o optabs.o options.o opts.o params.o postreload.o predict.o	   \
  print-rtl.o print-tree.o value-prof.o					   \
  profile.o ra.o ra-build.o ra-colorize.o ra-debug.o ra-rewrite.o	   \
@@ -2850,8 +2850,8 @@ install-cpp: cpp$(exeext)
 	-rm -f $(DESTDIR)$(bindir)/$(CPP_INSTALL_NAME)$(exeext)
 	-$(INSTALL_PROGRAM) -m 755 cpp$(exeext) $(DESTDIR)$(bindir)/$(CPP_INSTALL_NAME)$(exeext)
 	-if [ x$(cpp_install_dir) != x ]; then \
-	  rm -f $(DESTDIR)$(prefix)/$(cpp_install_dir)/$(CPP_INSTALL_NAME)$(exeext); \
-	  $(INSTALL_PROGRAM) -m 755 cpp$(exeext) $(DESTDIR)$(prefix)/$(cpp_install_dir)/$(CPP_INSTALL_NAME)$(exeext); \
+	    rm -f $(DESTDIR)$(prefix)/$(cpp_install_dir)/$(CPP_INSTALL_NAME)$(exeext); \
+	    $(INSTALL_PROGRAM) -m 755 cpp$(exeext) $(DESTDIR)$(prefix)/$(cpp_install_dir)/$(CPP_INSTALL_NAME)$(exeext); \
 	else true; fi
 
 # Create the installation directories.
@@ -2896,13 +2896,13 @@ install-common: native $(EXTRA_PARTS) lang.install-common installdirs
 	fi
 # Install protoize if it was compiled.
 	-if [ -f protoize$(exeext) ]; then \
-	  rm -f $(DESTDIR)$(bindir)/$(PROTOIZE_INSTALL_NAME)$(exeext); \
-	  $(INSTALL_PROGRAM) protoize$(exeext) $(DESTDIR)$(bindir)/$(PROTOIZE_INSTALL_NAME)$(exeext); \
-	  rm -f $(DESTDIR)$(bindir)/$(UNPROTOIZE_INSTALL_NAME)$(exeext); \
-	  $(INSTALL_PROGRAM) unprotoize$(exeext) $(DESTDIR)$(bindir)/$(UNPROTOIZE_INSTALL_NAME)$(exeext); \
-	  rm -f $(DESTDIR)$(libsubdir)/SYSCALLS.c.X; \
-	  $(INSTALL_DATA) SYSCALLS.c.X $(DESTDIR)$(libsubdir)/SYSCALLS.c.X; \
-	  chmod a-x $(DESTDIR)$(libsubdir)/SYSCALLS.c.X; \
+		rm -f $(DESTDIR)$(bindir)/$(PROTOIZE_INSTALL_NAME)$(exeext); \
+		$(INSTALL_PROGRAM) protoize$(exeext) $(DESTDIR)$(bindir)/$(PROTOIZE_INSTALL_NAME)$(exeext); \
+		rm -f $(DESTDIR)$(bindir)/$(UNPROTOIZE_INSTALL_NAME)$(exeext); \
+		$(INSTALL_PROGRAM) unprotoize$(exeext) $(DESTDIR)$(bindir)/$(UNPROTOIZE_INSTALL_NAME)$(exeext); \
+	    rm -f $(DESTDIR)$(libsubdir)/SYSCALLS.c.X; \
+	    $(INSTALL_DATA) SYSCALLS.c.X $(DESTDIR)$(libsubdir)/SYSCALLS.c.X; \
+	    chmod a-x $(DESTDIR)$(libsubdir)/SYSCALLS.c.X; \
 	fi
 # Install gcov if it was compiled.
 	-if [ -f gcov$(exeext) ]; \
@@ -3067,7 +3067,7 @@ install-mkheaders: stmp-int-hdrs $(STMP_FIXPROTO) install-include-dir \
 	  $(INSTALL_DATA) $(srcdir)/README-fixinc \
 	    $(DESTDIR)$(itoolsdatadir)/include/README ; \
 	  $(INSTALL_SCRIPT) fixinc.sh $(DESTDIR)$(itoolsdir)/fixinc.sh ; \
-	  $(INSTALL_PROGRAM) fixinc/fixincl $(DESTDIR)$(itoolsdir)/fixincl ; \
+	  $(INSTALL_PROGRAM) fixinc/fixincl$(build_exeext) $(DESTDIR)$(itoolsdir)/fixincl$(build_exeext) ; \
 	  $(INSTALL_DATA) $(srcdir)/gsyslimits.h \
 	    $(DESTDIR)$(itoolsdatadir)/gsyslimits.h ; \
 	else :; fi
@@ -3213,7 +3213,7 @@ $(lang_checks): check-% : $(TESTSUITEDIR)/site.exp
 	EXPECT=${EXPECT} ; export EXPECT ; \
 	if [ -f $${rootme}/../expect/expect ] ; then  \
 	   TCL_LIBRARY=`cd .. ; cd ${srcdir}/../tcl/library ; ${PWD_COMMAND}` ; \
-	    export TCL_LIBRARY ; fi ; \
+	   export TCL_LIBRARY ; fi ; \
 	$(RUNTEST) --tool $* $(RUNTESTFLAGS))
 
 check-consistency: testsuite/site.exp
@@ -3250,10 +3250,10 @@ QMTEST_DIR=qmtestsuite
 
 # Create the QMTest database configuration.
 ${QMTEST_DIR} stamp-qmtest:
-	${QMTEST} -D ${QMTEST_DIR} create-tdb \
-	    -c gcc_database.GCCDatabase \
+	    ${QMTEST} -D ${QMTEST_DIR} create-tdb \
+	        -c gcc_database.GCCDatabase \
             -a srcdir=`cd ${srcdir}/testsuite && ${PWD_COMMAND}` && \
-	    $(STAMP) stamp-qmtest
+	$(STAMP) stamp-qmtest
 
 # Create the QMTest context file.
 ${QMTEST_DIR}/context: stamp-qmtest
@@ -3291,17 +3291,17 @@ paranoia: paranoia.o real.o $(LIBIBERTY)
 
 # Update the tags table.
 TAGS: lang.tags
-	(cd $(srcdir);					\
+	(cd $(srcdir);							\
 	incs= ;						\
 	list='$(SUBDIRS)'; for dir in $$list; do	\
 	  if test -f $$dir/TAGS; then			\
 	    incs="$$incs --include $$dir/TAGS.sub";	\
 	  fi;						\
 	done;						\
-	mkdir tmp-tags;					\
+	mkdir tmp-tags;							\
 	mv -f c-parse.[ch] tmp-tags;			\
 	etags -o TAGS.sub *.y *.h *.c;			\
-	mv tmp-tags/* .;				\
+	mv tmp-tags/* .;						\
 	rmdir tmp-tags;					\
 	etags --include TAGS.sub $$incs)
 
@@ -3551,17 +3551,17 @@ fastcompare fastcompare3 fastcompare4 fastcompare-lean fastcompare3-lean fastcom
 	    for file in $$dir/*$(objext); do \
 	      case "$@" in \
 		slowcompare* ) \
-		  tail +16c ./$$file > tmp-foo1; \
-		  tail +16c stage$$stage/$$file > tmp-foo2 \
-		    && (cmp tmp-foo1 tmp-foo2 > /dev/null 2>&1 || echo $$file differs >> .bad_compare) || true; \
+	      tail +16c ./$$file > tmp-foo1; \
+	      tail +16c stage$$stage/$$file > tmp-foo2 \
+	        && (cmp tmp-foo1 tmp-foo2 > /dev/null 2>&1 || echo $$file differs >> .bad_compare) || true; \
 		  ;; \
 		fastcompare* ) \
 		  cmp $$file stage$$stage/$$file 16 16 > /dev/null 2>&1; \
-		  test $$? -eq 1 && echo $$file differs >> .bad_compare || true; \
+	  test $$? -eq 1 && echo $$file differs >> .bad_compare || true; \
 		  ;; \
 		gnucompare* ) \
-		  cmp --ignore-initial=16 $$file stage$$stage/$$file > /dev/null 2>&1; \
-		  test $$? -eq 1 && echo $$file differs >> .bad_compare || true; \
+	      cmp --ignore-initial=16 $$file stage$$stage/$$file > /dev/null 2>&1; \
+	      test $$? -eq 1 && echo $$file differs >> .bad_compare || true; \
 		  ;; \
 	      esac ; \
 	    done; \

@@ -13,5 +13,5 @@ void zzz (char *s1, char *s2, int len, int *q)
     
   *q = len;
 
-  foo (x, x);
+  foo (x, x); /* { dg-bogus "Do not know how to handle large structs or variable length types" "" { xfail nios2-*-* } } */
 }

@@ -3,6 +3,7 @@
 /* { dg-require-profiling "-pg" } */
 /* { dg-options "-O2 -pg" } */
 /* { dg-options "-O2 -pg -static" { target hppa*-*-hpux* } } */
+/* { dg-options "-O2" { target nios2-*-* } } */
 /* { dg-error "profiler" "No profiler support" { target xstormy16-*-* } 0 } */
 /* { dg-error "-pg not supported" "Profiler support missing" { target *-*-sco3.2v5* } 0 } */
 

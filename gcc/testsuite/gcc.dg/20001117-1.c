@@ -1,4 +1,4 @@
-/* { dg-do run } */
+/* { dg-do run { xfail "nios2-*-*" } } */
 /* { dg-options "-O2 -finstrument-functions" } */
 
 double

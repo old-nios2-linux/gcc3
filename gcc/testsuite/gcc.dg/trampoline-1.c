@@ -7,6 +7,12 @@
 /* This used to fail on various versions of Solaris 2 because the
    trampoline couldn't be made executable.  */
 
+#ifdef NO_TRAMPOLINES
+void foo (void)
+{
+}
+#else
+
 extern void abort(void);
 
 void foo (void)
@@ -42,6 +48,7 @@ void foo (void)
       abort();
   }
 }
+#endif
 
 int main (void)
 {

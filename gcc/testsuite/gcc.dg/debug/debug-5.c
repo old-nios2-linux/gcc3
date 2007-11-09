@@ -2,6 +2,10 @@
    (spanned 0 basic blocks) and DWARF-2 couldn't find baz origin.  */
 /* { dg-do compile } */
 
+#ifdef NO_TRAMPOLINES
+int x;
+#else
+
 extern void abort (void);
 
 struct A { char *a, *b, *c, *d; };
@@ -44,3 +48,5 @@ foo (void)
       f->c = f->d;
   }
 }
+
+#endif

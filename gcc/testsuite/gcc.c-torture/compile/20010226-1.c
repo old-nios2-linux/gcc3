@@ -1,3 +1,4 @@
+#ifndef NO_TRAMPOLINES
 void f1 (void *);
 void f3 (void *, void (*)(void *));
 void f2 (void *);
@@ -20,3 +21,6 @@ int foo (void *a, int b)
     }
   return 0;
 }
+#else
+int x;
+#endif

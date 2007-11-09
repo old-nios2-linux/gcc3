@@ -6,7 +6,7 @@
 
 int main() 
 { 
-  typedef int v __attribute__ ((mode(V2DI))); 
+  typedef int v __attribute__ ((mode(V2DI)));  /* { dg-error "unable to emulate" "" { target nios2-*-* } } */
   v a, b; 
   a = b; 
   return 0; 

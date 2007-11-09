@@ -30,6 +30,9 @@
 #include "unwind-cxx.h"
 #include <bits/c++config.h>
 
+/* NiosII Specific: we don't want the more verbose terminate handler */
+#define _GLIBCXX_HOSTED 0
+
 /* We default to the talkative, informative handler in a normal hosted
    library.  This pulls in the demangler, the dyn-string utilities, and
    elements of the I/O library.  For a low-memory environment, you can return

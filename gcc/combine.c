@@ -4379,6 +4379,14 @@ combine_simplify_rtx (rtx x, enum machine_mode op0_mode, int last,
 					 mode);
 	    }
 
+#if 0
+/* This screws up Nios II in this test case:
+
+if (x & 1)
+  return 2;
+else
+  return 3;
+*/
 	  else if (STORE_FLAG_VALUE == 1
 		   && new_code == EQ && GET_MODE_CLASS (mode) == MODE_INT
 		   && op1 == const0_rtx
@@ -4390,6 +4398,7 @@ combine_simplify_rtx (rtx x, enum machine_mode op0_mode, int last,
 				 gen_lowpart_for_combine (mode, op0),
 				 const1_rtx);
 	    }
+#endif
 
 	  else if (STORE_FLAG_VALUE == 1
 		   && new_code == EQ && GET_MODE_CLASS (mode) == MODE_INT

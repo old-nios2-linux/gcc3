@@ -1256,7 +1256,7 @@ instruction is defined:
   @dots{})
 @end smallexample
 @end ifset
-GCC can only handle one commutative pair in an asm; if you use more,
+GCC can only handle one commutative pair in an asm; if you use more, 
 the compiler may fail.
 
 @cindex @samp{#} in constraint
@@ -1314,15 +1314,15 @@ The constraints are defined through these macros:
 
 @table @code
 @item REG_CLASS_FROM_LETTER
-Register class constraints (usually lowercase).
+Register class constraints (usually lower case).
 
 @item CONST_OK_FOR_LETTER_P
 Immediate constant constraints, for non-floating point constants of
-word size or smaller precision (usually uppercase).
+word size or smaller precision (usually upper case).
 
 @item CONST_DOUBLE_OK_FOR_LETTER_P
 Immediate constant constraints, for all floating point constants and for
-constants of greater than word size precision (usually uppercase).
+constants of greater than word size precision (usually upper case).
 
 @item EXTRA_CONSTRAINT
 Special cases of registers or memory.  This macro is not required, and
@@ -1335,6 +1335,58 @@ However, here is a summary of the machine-dependent constraints
 available on some particular machines.
 
 @table @emph
+
+@item Altera Nios II family---@file{nios2.h}
+@table @code
+
+@item I
+Integer that is valid as an immediate operand in an
+instruction taking a signed 16-bit number. Range
+@minus{}32768 to 32767.
+
+@item J
+Integer that is valid as an immediate operand in an
+instruction taking an unsigned 16-bit number. Range
+0 to 65535.
+
+@item K
+Integer that is valid as an immediate operand in an
+instruction taking only the upper 16-bits of a
+32-bit number. Range 32-bit numbers with the lower
+16-bits being 0.
+
+@item L
+Integer that is valid as an immediate operand for a 
+shift instruction. Range 0 to 31.
+
+
+@item M
+Integer that is valid as an immediate operand for
+only the value 0. Can be used in conjunction with
+the format modifier @code{z} to use @code{r0}
+instead of @code{0} in the assembly output.
+
+@item N
+Integer that is valid as an immediate operand for
+a custom instruction opcode. Range 0 to 255.
+
+@item S
+Matches immediates which are addresses in the small
+data section and therefore can be added to @code{gp}
+as a 16-bit immediate to re-create their 32-bit value.
+
+@item D@var{nn}
+For a given two digit @var{nn} constrains the operand
+to the corresponding register. Example: D02 forces the
+operand into register r2. The side effect of using this
+operand constraint is that reload may not be able to 
+meet the constraint. If reload fails, an error message
+about failing to find any register to spill in the
+D@var{nn}_REG register class will be emitted.
+
+@end table
+
+
 @item ARM family---@file{arm.h}
 @table @code
 @item f
@@ -2360,7 +2412,7 @@ pattern to accomplish a certain task.
 @table @asis
 @cindex @code{mov@var{m}} instruction pattern
 @item @samp{mov@var{m}}
-Here @var{m} stands for a two-letter machine mode name, in lowercase.
+Here @var{m} stands for a two-letter machine mode name, in lower case.
 This instruction pattern moves data with that machine mode from operand
 1 to operand 0.  For example, @samp{movsi} moves full-word data.
 
@@ -3885,7 +3937,7 @@ first operand.
 @item
 In combinations of @code{neg}, @code{mult}, @code{plus}, and
 @code{minus}, the @code{neg} operations (if any) will be moved inside
-the operations as far as possible.  For instance,
+the operations as far as possible.  For instance, 
 @code{(neg (mult A B))} is canonicalized as @code{(mult (neg A) B)}, but
 @code{(plus (mult (neg A) B) C)} is canonicalized as
 @code{(minus A (mult B C))}.
@@ -4882,7 +4934,7 @@ A @samp{#define} is written for the symbol @samp{HAVE_ATTR_@var{name}}.
 @item
 An enumeral class is defined for @samp{attr_@var{name}} with
 elements of the form @samp{@var{upper-name}_@var{upper-value}} where
-the attribute name and value are first converted to uppercase.
+the attribute name and value are first converted to upper case.
 
 @item
 A function @samp{get_attr_@var{name}} is defined that is passed an insn and
@@ -5526,13 +5578,13 @@ processors.
 The task of exploiting more processor parallelism is solved by an
 instruction scheduler.  For a better solution to this problem, the
 instruction scheduler has to have an adequate description of the
-processor parallelism (or @dfn{pipeline description}).  Currently GCC
+processor parallelism (or @dfn{pipeline description}).  Currently GCC 
 provides two alternative ways to describe processor parallelism,
 both described below.  The first method is outlined in the next section;
 it was once the only method provided by GCC, and thus is used in a number
 of exiting ports.  The second, and preferred method, specifies functional
 unit reservations for groups of instructions with the aid of @dfn{regular
-expressions}.  This is called the @dfn{automaton based description}.
+expressions}.  This is called the @dfn{automaton based description}.	
 
 The GCC instruction scheduler uses a @dfn{pipeline hazard recognizer} to
 figure out the possibility of the instruction issue by the processor
@@ -5705,7 +5757,7 @@ The following optional construction describes names of automata
 generated and used for the pipeline hazards recognition.  Sometimes
 the generated finite state automaton used by the pipeline hazard
 recognizer is large.  If we use more than one automaton and bind functional
-units to the automata, the total size of the automata is usually
+units to the automata, the total size of the automata is usually 
 less than the size of the single automaton.  If there is no one such
 construction, only one finite state automaton is generated.
 
@@ -5819,7 +5871,7 @@ expression according to the following syntax:
 
        allof = allof "+" repeat
              | repeat
-
+ 
        repeat = element "*" number
               | element
 
@@ -6128,7 +6180,7 @@ construction
 The old instruction level parallelism description and the pipeline
 hazards recognizer based on it have the following drawbacks in
 comparison with the @acronym{DFA}-based ones:
-
+  
 @itemize @bullet
 @item
 Each functional unit is believed to be reserved at the instruction

@@ -503,9 +503,9 @@ struct table_elt
    a cost of 2.  Aside from these special cases, call `rtx_cost'.  */
 
 #define CHEAP_REGNO(N) \
-  ((N) == FRAME_POINTER_REGNUM || (N) == HARD_FRAME_POINTER_REGNUM	\
-   || (N) == STACK_POINTER_REGNUM || (N) == ARG_POINTER_REGNUM		\
-   || ((N) >= FIRST_VIRTUAL_REGISTER && (N) <= LAST_VIRTUAL_REGISTER)	\
+  ((N) == FRAME_POINTER_REGNUM || (N) == HARD_FRAME_POINTER_REGNUM 	\
+   || (N) == STACK_POINTER_REGNUM || (N) == ARG_POINTER_REGNUM	     	\
+   || ((N) >= FIRST_VIRTUAL_REGISTER && (N) <= LAST_VIRTUAL_REGISTER) 	\
    || ((N) < FIRST_PSEUDO_REGISTER					\
        && FIXED_REGNO_P (N) && REGNO_REG_CLASS (N) != NO_REGS))
 
@@ -514,7 +514,7 @@ struct table_elt
 
 /* Get the info associated with register N.  */
 
-#define GET_CSE_REG_INFO(N)			\
+#define GET_CSE_REG_INFO(N) 			\
   (((N) == cached_regno && cached_cse_reg_info)	\
    ? cached_cse_reg_info : get_cse_reg_info ((N)))
 
@@ -661,7 +661,7 @@ static bool dead_libcall_p (rtx, int *);
 static int cse_change_cc_mode (rtx *, void *);
 static void cse_change_cc_mode_insns (rtx, rtx, rtx);
 static enum machine_mode cse_cc_succs (basic_block, rtx, rtx, bool);
-
+
 /* Nonzero if X has the form (PLUS frame-pointer integer).  We check for
    virtual regs here because the simplify_*_operation routines are called
    by integrate.c, which is called before virtual register instantiation.  */
@@ -693,7 +693,7 @@ fixed_base_plus_p (rtx x)
       return false;
     }
 }
-
+
 /* Dump the expressions in the equivalence class indicated by CLASSP.
    This function is used only for debugging.  */
 void
@@ -1735,7 +1735,7 @@ merge_equiv_classes (struct table_elt *class1, struct table_elt *class2)
 	  if (GET_CODE (exp) == REG)
 	    {
 	      need_rehash = (unsigned) REG_QTY (REGNO (exp)) != REGNO (exp);
-	      delete_reg_equiv (REGNO (exp));
+	    delete_reg_equiv (REGNO (exp));
 	    }
 
 	  remove_from_table (elt, hash);
@@ -2249,7 +2249,7 @@ canon_hash (rtx x, enum machine_mode mode)
 	  record = false;
 	else
 	  record = true;
-
+	    
 	if (!record)
 	  {
 	    do_not_record = 1;
@@ -2327,7 +2327,7 @@ canon_hash (rtx x, enum machine_mode mode)
 	  return 0;
 	}
       if (! RTX_UNCHANGING_P (x) || fixed_base_plus_p (XEXP (x, 0)))
-	hash_arg_in_memory = 1;
+	  hash_arg_in_memory = 1;
 
       /* Now that we have already found this special case,
 	 might as well speed it up as much as possible.  */
@@ -3133,6 +3133,8 @@ find_comparison_args (enum rtx_code code, rtx *parg1, rtx *parg2,
 #ifdef FLOAT_STORE_FLAG_VALUE
 	  REAL_VALUE_TYPE fsfv;
 #endif
+	  if (p->is_const)
+	    break;
 
 	  /* If the entry isn't valid, skip it.  */
 	  if (! exp_equiv_p (p->exp, p->exp, 1, 0))
@@ -3298,11 +3300,11 @@ fold_rtx (rtx x, rtx insn)
       /* If the next insn is a CODE_LABEL followed by a jump table,
 	 PC's value is a LABEL_REF pointing to that label.  That
 	 lets us fold switch statements on the VAX.  */
-      {
+	{
 	rtx next;
 	if (insn && tablejump_p (insn, &next, NULL))
-	  return gen_rtx_LABEL_REF (Pmode, next);
-      }
+	    return gen_rtx_LABEL_REF (Pmode, next);
+	}
       break;
 
     case SUBREG:
@@ -3543,7 +3545,7 @@ fold_rtx (rtx x, rtx insn)
 
 	    if (CONSTANT_P (constant) && GET_CODE (constant) != CONST_INT)
 	      {
-		constant_pool_entries_cost = COST (constant);
+	      constant_pool_entries_cost = COST (constant);
 		constant_pool_entries_regcost = approx_reg_cost (constant);
 	      }
 
@@ -4376,7 +4378,7 @@ gen_lowpart_if_possible (enum machine_mode mode, rtx x)
 
    In certain cases, this can cause us to add an equivalence.  For example,
    if we are following the taken case of
-	if (i == 2)
+   	if (i == 2)
    we can add the fact that `i' and '2' are now equivalent.
 
    In any case, we can record that this comparison was passed.  If the same
@@ -5631,11 +5633,11 @@ cse_insn (rtx insn, rtx libcall_insn)
 	  if (! rtx_equal_p (src, src_const))
 	    {
 	      /* Make sure that the rtx is not shared.  */
-	      src_const = copy_rtx (src_const);
+	  src_const = copy_rtx (src_const);
 
 	      /* Record the actual constant value in a REG_EQUAL note,
 		 making a new one if one does not already exist.  */
-	      set_unique_reg_note (insn, REG_EQUAL, src_const);
+	  set_unique_reg_note (insn, REG_EQUAL, src_const);
 	    }
 	}
 
@@ -6225,7 +6227,7 @@ cse_insn (rtx insn, rtx libcall_insn)
 	    }
 	  while (prev && GET_CODE (prev) == NOTE
 		 && NOTE_LINE_NUMBER (prev) != NOTE_INSN_BASIC_BLOCK);
-
+	    
 	  /* Do not swap the registers around if the previous instruction
 	     attaches a REG_EQUIV note to REG1.
 
@@ -7216,7 +7218,7 @@ cse_basic_block (rtx from, rtx to, struct branch_path *next_branch,
 		  /* Keep libcall_insn for the last SET insn of a no-conflict
 		     block to prevent changing the destination.  */
 		  if (! no_conflict)
-		    libcall_insn = 0;
+		libcall_insn = 0;
 		  else
 		    no_conflict = -1;
 		}
@@ -7386,7 +7388,7 @@ count_reg_usage (rtx x, int *counts, int incr)
   switch (code = GET_CODE (x))
     {
     case REG:
-      counts[REGNO (x)] += incr;
+	counts[REGNO (x)] += incr;
       return;
 
     case PC:
@@ -7562,10 +7564,10 @@ dead_libcall_p (rtx insn, int *counts)
     return false;
 
   new = simplify_rtx (XEXP (note, 0));
-  if (!new)
-    new = XEXP (note, 0);
+      if (!new)
+	new = XEXP (note, 0);
 
-  /* While changing insn, we must update the counts accordingly.  */
+      /* While changing insn, we must update the counts accordingly.  */
   count_reg_usage (insn, counts, -1);
 
   if (validate_change (insn, &SET_SRC (set), new, 0))

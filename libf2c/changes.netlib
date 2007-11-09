@@ -2272,7 +2272,7 @@ Wed Jan 25 00:14:42 EST 1995
 to have __ appended when used as local variables).
   libf77: add s_copyow.c, an alternative to s_copy.c for handling
 (illegal) character assignments where the right- and left-hand
-sides overlap, as in a(2:4) = a(1:3).
+sides overlap, as in a(2:4) = a(1:3).
 
 Thu Jan 26 14:21:19 EST 1995
   libf77: roll s_catow.c and s_copyow.c into s_cat.c and s_copy.c,

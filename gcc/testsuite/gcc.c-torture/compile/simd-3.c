@@ -3,7 +3,7 @@
 /* If double is not wider than float, we probably don't have DFmode,
    or at least it's not as wide as double.  */
 #if DBL_MANT_DIG > FLT_MANT_DIG
-typedef float floatvect2 __attribute__((mode(V2DF)));
+typedef float floatvect2 __attribute__((mode(V2DF))); /* { dg-error "unable to emulate" "" { target nios2-*-* } } */
 
 typedef union
 {

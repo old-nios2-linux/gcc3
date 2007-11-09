@@ -276,6 +276,11 @@ case $basic_machine in
 		basic_machine=$basic_machine-unknown
 		os=-none
 		;;
+	# JBG
+	nios2 | nios2-* | nios2 | nios2-*)
+		basic_machine=nios2-altera
+		os=-none
+		;;
 	m88110 | m680[12346]0 | m683?2 | m68360 | m5200 | v70 | w65 | z8k)
 		;;
 

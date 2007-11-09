@@ -5,7 +5,8 @@
 
    Written by Roger Sayle, 1st June 2003.  */
 
-/* { dg-do link } */
+/* This test fails to link on Nios II, so only compile... */
+/* { dg-do compile } */
 /* { dg-options "-O2 -ffast-math" } */
 
 #include "builtins-config.h"

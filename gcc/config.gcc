@@ -220,22 +220,22 @@ case ${target} in
  | i[34567]86-sequent-sysv[123]*	\
  | i[34567]86-go32-*			\
  | i[34567]86-*-go32*			\
- | m68k-*-linux*aout*			\
- | m68k-*-linux*libc1*			\
+ | m68k-*-linux*aout*		\
+ | m68k-*-linux*libc1*		\
  | mips64orion*-*-rtems*		\
  | powerpc-*-linux*libc1*		\
- | sparc-*-linux*aout*			\
- | sparc-*-linux*libc1*			\
- | sparc-hal-solaris2*			\
+ | sparc-*-linux*aout*		\
+ | sparc-*-linux*libc1*		\
+ | sparc-hal-solaris2*		\
  | thumb-*-*				\
  | *-*-linux*coff*			\
  | *-*-linux*oldld*			\
  | *-*-rtemsaout*			\
  | *-*-rtemscoff*			\
- | vax-*-vms*				\
+ | vax-*-vms*			\
  )
 	echo "*** Configuration ${target} not supported" 1>&2
-	exit 1
+      exit 1
 	;;
 esac
 
@@ -371,7 +371,7 @@ case ${target} in
   # This place-holder must exist to avoid dropping into
   # the generic ELF configuration of FreeBSD (i.e. it must be
   # ordered before that section).
-  ;;
+		;;
 *-*-freebsd*)
   # This is the generic ELF configuration of FreeBSD.  Later
   # machine-specific sections may refine and add to this
@@ -400,7 +400,7 @@ case ${target} in
       tm_defines="${tm_defines} FBSD_MAJOR=5" ;;
     *-*-freebsd6 | *-*-freebsd[6].*)
       tm_defines="${tm_defines} FBSD_MAJOR=6" ;;
-    *)
+	*)
       echo 'Please update *-*-freebsd* in gcc/config.gcc'
       exit 1
       ;;
@@ -409,7 +409,7 @@ case ${target} in
   case ${enable_threads} in
     no)
       fbsd_tm_file="${fbsd_tm_file} freebsd-nthr.h"
-      ;;
+			;;
     "" | yes | posix)
       thread_file='posix'
       tmake_file="${tmake_file} t-freebsd-thread"
@@ -437,8 +437,8 @@ case ${target} in
   gnu_ld=yes
   case ${enable_threads} in
     "" | yes | posix) thread_file='posix' ;;
-  esac
-  ;;
+		esac
+		;;
 *-*-linux*libc1* | *-*-linux*aout*)
   # Avoid the generic linux case.
   ;;
@@ -449,81 +449,81 @@ case ${target} in
   gnu_ld=yes
   case ${enable_threads} in
     "" | yes | posix) thread_file='posix' ;;
-  esac
-  ;;
+	esac
+	;;
 *-*-gnu*)
-  # On the Hurd, the setup is just about the same on
-  # each different CPU.  The specific machines that we
-  # support are matched above and just set $cpu_type.
-  tm_file="${cpu_type}/gnu.h"
-  extra_parts="crtbegin.o crtend.o crtbeginS.o crtendS.o crtbeginT.o"
-  # GNU tools are the only tools.
-  gas=yes
+	# On the Hurd, the setup is just about the same on
+	# each different CPU.  The specific machines that we
+	# support are matched above and just set $cpu_type.
+	tm_file="${cpu_type}/gnu.h"
+	extra_parts="crtbegin.o crtend.o crtbeginS.o crtendS.o crtbeginT.o"
+	# GNU tools are the only tools.
+	gas=yes
   gnu_ld=yes
-  # These details are the same as for Linux.
-  # But here we need a little extra magic.
-  tmake_file="t-slibgcc-elf-ver t-linux t-gnu"
+	# These details are the same as for Linux.
+	# But here we need a little extra magic.
+	tmake_file="t-slibgcc-elf-ver t-linux t-gnu"
   case ${target} in
-    alpha*)
-      tm_file="${cpu_type}/${cpu_type}.h alpha/elf.h alpha/linux.h alpha/linux-elf.h gnu.h ${tm_file}"
-      ;;
-    i[34567]86-*-*)
-      tm_file="${cpu_type}/${cpu_type}.h i386/unix.h i386/att.h dbxelf.h elfos.h svr4.h linux.h i386/linux.h gnu.h ${tm_file}"
-      ;;
-  esac
-  ;;
+	alpha*)
+		tm_file="${cpu_type}/${cpu_type}.h alpha/elf.h alpha/linux.h alpha/linux-elf.h gnu.h ${tm_file}"
+		;;
+	i[34567]86-*-*)
+		tm_file="${cpu_type}/${cpu_type}.h i386/unix.h i386/att.h dbxelf.h elfos.h svr4.h linux.h i386/linux.h gnu.h ${tm_file}"
+		;;
+	esac
+	;;
 *-*-netbsd*)
   tmake_file="t-slibgcc-elf-ver t-libc-ok t-netbsd t-libgcc-pic"
-  gas=yes
-  gnu_ld=yes
+	gas=yes
+	gnu_ld=yes
 
-  # NetBSD 2.0 and later get POSIX threads enabled by default.
-  # Allow them to be explicitly enabled on any other version.
+	# NetBSD 2.0 and later get POSIX threads enabled by default.
+	# Allow them to be explicitly enabled on any other version.
   case ${enable_threads} in
     "")
       case ${target} in
-        *-*-netbsd[2-9]* | *-*-netbsdelf[2-9]*)
-          thread_file='posix'
-          tm_defines="${tm_defines} NETBSD_ENABLE_PTHREADS"
-          ;;
-      esac
-      ;;
+		*-*-netbsd[2-9]* | *-*-netbsdelf[2-9]*)
+			thread_file='posix'
+			tm_defines="${tm_defines} NETBSD_ENABLE_PTHREADS"
+			;;
+		esac
+		;;
     yes | posix)
-      thread_file='posix'
-      tm_defines="${tm_defines} NETBSD_ENABLE_PTHREADS"
-      ;;
-  esac
+		thread_file='posix'
+		tm_defines="${tm_defines} NETBSD_ENABLE_PTHREADS"
+		;;
+	esac
 
-  # NetBSD 1.7 and later are set up to use GCC's crtstuff for
-  # ELF configurations.  We will clear extra_parts in the
-  # a.out configurations.
+	# NetBSD 1.7 and later are set up to use GCC's crtstuff for
+	# ELF configurations.  We will clear extra_parts in the
+	# a.out configurations.
   case ${target} in
-    *-*-netbsd*1.[7-9]* | *-*-netbsd[2-9]* | *-*-netbsdelf[2-9]*)
-      extra_parts="crtbegin.o crtend.o crtbeginS.o crtendS.o crtbeginT.o"
-      ;;
-  esac
+	*-*-netbsd*1.[7-9]* | *-*-netbsd[2-9]* | *-*-netbsdelf[2-9]*)
+		extra_parts="crtbegin.o crtend.o crtbeginS.o crtendS.o crtbeginT.o"
+		;;
+	esac
 
   # NetBSD 2.0 and later provide __cxa_atexit(), which we use by
   # default (unless overridden by --disable-__cxa_atexit).
   case ${target} in
     *-*-netbsd[2-9]* | *-*-netbsdelf[2-9]*)
       default_use_cxa_atexit=yes
-      ;;
-  esac
+	;;
+	esac
   ;;
 *-*-openbsd*)
   tmake_file="t-libc-ok t-openbsd t-libgcc-pic"
   case ${enable_threads} in
     yes)
-      thread_file='posix'
+		thread_file='posix'
       tmake_file="${tmake_file} t-openbsd-thread"
       ;;
-  esac
-  ;;
+		esac
+		;;
 *-*-rtems*)
   case ${enable_threads} in
     yes) thread_file='rtems' ;;
-  esac
+	esac
   ;;
 *-*-vxworks*)
   tmake_file=t-vxworks
@@ -535,7 +535,7 @@ case ${target} in
   esac
   use_collect2=yes
   xm_defines=POSIX
-  ;;
+	;;
 esac
 
 case ${target} in
@@ -616,7 +616,7 @@ alpha*-dec-osf[45]*)
 	  "" | yes | posix)
 	    thread_file='posix'
 	    tmake_file="${tmake_file} alpha/t-osf-pthread"
-	    ;;
+	;;
 	esac
 	;;
 alpha64-dec-*vms*)
@@ -910,7 +910,7 @@ i[34567]86-*-elf*)
 	;;
 i[34567]86-ncr-sysv4*)		# NCR 3000 - ix86 running system V.4
 	xm_defines="SMALL_ARG_MAX"
-	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h svr4.h i386/sysv4.h i386/sysv4-cpp.h"
+		tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h svr4.h i386/sysv4.h i386/sysv4-cpp.h"
 	extra_parts="crtbegin.o crtend.o"
 	tmake_file=i386/t-crtpic
 	use_fixproto=yes
@@ -1214,7 +1214,7 @@ i860-*-sysv4*)
         tmake_file="i860/t-i860 i860/t-svr4"
         extra_parts="crtbegin.o crtend.o"
 	use_fixproto=yes
-        ;;
+	;;
 i960-*-coff*)
 	tm_file="${tm_file} dbxcoff.h i960/i960-coff.h libgloss.h"
 	tmake_file=i960/t-960bare
@@ -1290,7 +1290,7 @@ iq2000*-*-elf*)
         out_file=iq2000/iq2000.c
         md_file=iq2000/iq2000.md
 	use_fixproto=yes
-        ;;
+	;;
 m32r-*-elf*)
 	tm_file="dbxelf.h elfos.h svr4.h ${tm_file}"
 	extra_parts="crtinit.o crtfini.o"
@@ -1321,6 +1321,10 @@ m32rle-*-linux*)
 		thread_file='posix'
 	fi
 	;;
+# JBG
+nios2-*-* | nios2-*-*)
+	tm_file="elfos.h ${tm_file}"
+	;;
 # m68hc11 and m68hc12 share the same machine description.
 m68hc11-*-*|m6811-*-*)
 	tm_file="dbxelf.h elfos.h m68hc11/m68hc11.h"
@@ -1337,7 +1341,7 @@ m68hc12-*-*|m6812-*-*)
 	out_file="m68hc11/m68hc11.c"
 	tmake_file="m68hc11/t-m68hc11-gas"
 	use_fixproto=yes
-        ;;
+	;;
 m68000-hp-hpux*)		# HP 9000 series 300
 	tm_file="m68k/hp320base.h m68k/m68k.h m68k/hp320.h m68k/hp310.h"
 	tm_defines="TARGET_DEFAULT=0" # 68000, no 68881, no bitfield ops
@@ -1466,7 +1470,7 @@ mips-sgi-irix6*)		# SGI System V.4., IRIX 6
 	if test x$gas = xyes
 	then
 		tm_file="${tm_file} mips/iris6gas.h"
-	fi
+		fi
 	if test "x$gnu_ld" = xyes
 	then
 		tm_file="${tm_file} mips/iris6gld.h"
@@ -1496,7 +1500,7 @@ mips-sgi-irix5cross64)		# Irix5 host, Irix 6 target, cross64
 #		thread_file='irix'
 #	fi
 	use_fixproto=yes
-	;;
+        ;;
 mips-sgi-irix5*)		# SGI System V.4., IRIX 5
 	tm_file="${tm_file} mips/iris5.h"
 	if test x$gas = xyes
@@ -1521,7 +1525,7 @@ mips-sgi-irix5*)		# SGI System V.4., IRIX 5
 	# See comment in mips/iris5.h file.
 	if test x$gas = xno
 	then
-		use_collect2=yes
+	use_collect2=yes
 	fi
 #	if test x$enable_threads = xyes; then
 #		thread_file='irix'
@@ -1722,8 +1726,8 @@ powerpc-*-chorusos*)
 	tmake_file="rs6000/t-fprules rs6000/t-ppcos rs6000/t-ppccomm"
 	case ${enable_threads} in
 	  yes | posix)
-	    thread_file='posix'
-	    ;;
+		thread_file='posix'
+		;;
 	esac
 	use_fixproto=yes
 	;;
@@ -1789,7 +1793,7 @@ powerpc-wrs-vxworks*)
 	tm_file="${tm_file} vxworks.h rs6000/vxworks.h"
 	tmake_file="${tmake_file} rs6000/t-fprules rs6000/t-ppccomm rs6000/t-vxworks"
 	extra_headers=ppc-asm.h
-	;;
+        ;;
 powerpc-wrs-windiss*)	# Instruction-level simulator for VxWorks.
 	tm_file="${tm_file} elfos.h svr4.h freebsd-spec.h rs6000/sysv4.h rs6000/windiss.h"
         tmake_file="rs6000/t-fprules rs6000/t-ppcgas rs6000/t-ppccomm"
@@ -2050,7 +2054,7 @@ sparc64-*-solaris2* | sparcv9-*-solaris2*)
 	    fi
 	fi
 	need_64bit_hwint=yes
-	;;
+        ;;
 sparc-*-solaris2*)
 	tm_file="${tm_file} dbxelf.h elfos.h svr4.h sparc/sysv4.h sol2.h sparc/sol2.h"
 	if test x$gnu_ld = xyes; then
@@ -2304,7 +2308,7 @@ case ${with_cpu} in
   yes | no)
     echo "--with-cpu must be passed a value" 1>&2
     exit 1
-    ;;
+	;;
 esac
 
 # If there is no $with_cpu option, try to infer one from ${target}.
@@ -2315,40 +2319,40 @@ if test x$with_cpu = x ; then
       # A Cirrus ARM variant.
       with_cpu="ep9312"
       ;;
-    i486-*-*)
+i486-*-*)
       with_cpu=i486
-      ;;
-    i586-*-*)
+	;;
+i586-*-*)
       case ${target_noncanonical} in
-        k6_2-*)
+		k6_2-*)
           with_cpu=k6-2
-          ;;
-        k6_3-*)
+			;;
+		k6_3-*)
           with_cpu=k6-3
-          ;;
-        k6-*)
+			;;
+		k6-*)
           with_cpu=k6
-          ;;
-        pentium_mmx-*|winchip_c6-*|winchip2-*|c3-*)
+			;;
+		pentium_mmx-*|winchip_c6-*|winchip2-*|c3-*)
           with_cpu=pentium-mmx
-          ;;
-        *)
+			;;
+		*)
           with_cpu=pentium
-          ;;
-      esac
-      ;;
-    i686-*-* | i786-*-*)
+			;;
+	esac
+	;;
+i686-*-* | i786-*-*)
       case ${target_noncanonical} in
         k8-*|opteron-*|athlon_64-*)
           with_cpu=k8
           ;;
-        athlon_xp-*|athlon_mp-*|athlon_4-*)
+		athlon_xp-*|athlon_mp-*|athlon_4-*)
           with_cpu=athlon-4
-          ;;
-        athlon_tbird-*|athlon-*)
+			;;
+		athlon_tbird-*|athlon-*)
           with_cpu=athlon
-          ;;
-        pentium2-*)
+			;;
+		pentium2-*)
           with_cpu=pentium2
           ;;
         pentium3-*|pentium3m-*)
@@ -2356,22 +2360,22 @@ if test x$with_cpu = x ; then
           ;;
         pentium4-*|pentium4m-*)
           with_cpu=pentium4
-          ;;
+			;;
         prescott-*)
           with_cpu=prescott
-          ;;
+			;;
         nocona-*)
           with_cpu=nocona
           ;;
         pentium_m-*)
           with_cpu=pentium-m
-          ;;
-        *)
+			;;
+		*)
           with_cpu=pentiumpro
-          ;;
-      esac
-      ;;
-    x86_64-*-*)
+			;;
+	esac
+	;;
+x86_64-*-*)
       with_cpu=k8
       ;;
     alphaev6[78]*-*-*)
@@ -2404,7 +2408,7 @@ fi
 		hppa1* | parisc1*)
 			# Override default PA8000 scheduling model.
 			with_schedule=7100LC
-			;;
+	;;
 		esac
 	fi
 
@@ -2416,7 +2420,7 @@ fi
 
 	supported_defaults=
 	case "${target}" in
-	alpha*-*-*)
+alpha*-*-*)
 		supported_defaults="cpu tune"
 		for which in cpu tune; do
 			eval "val=\$with_$which"
@@ -2628,7 +2632,7 @@ fi
 			*)
 				echo "Unknown cpu used in --with-$which=$val" 1>&2
 				exit 1
-				;;
+			;;
 			esac
 		done
 
@@ -2641,7 +2645,7 @@ fi
 			exit 1
 			;;
 		esac
-		;;
+			;;
 
 	v850*-*-*)
 		supported_defaults=cpu
@@ -2654,21 +2658,21 @@ fi
 			exit 1
 			;;
 		esac
-		;;
+			;;
 	esac
 
 	# Set some miscellaneous flags for particular targets.
 	target_cpu_default2=
 	case ${target} in
 	alpha*-*-*)
-		if test x$gas = xyes
-		then
+	if test x$gas = xyes
+	then
 			target_cpu_default2="MASK_GAS"
-		fi
-		;;
+	fi
+	;;
 
-	arm*-*-*)
-		case "x$with_cpu" in
+arm*-*-*)
+	case "x$with_cpu" in
 		x)
 			# The most generic
 			target_cpu_default2="TARGET_CPU_generic"
@@ -2677,73 +2681,73 @@ fi
 		*)
 			target_cpu_default2="TARGET_CPU_$with_cpu"
 			;;
-		esac
-		;;
+	esac
+	;;
 
-	hppa*-*-* | parisc*-*-*)
+hppa*-*-* | parisc*-*-*)
+	if test x$gas = xyes
+	then
+		target_cpu_default2="MASK_GAS|MASK_JUMP_IN_DELAY"
+	fi
+	;;
+
+mips*-*-*)
+		case ${target} in
+	mips*-*-ecoff* | mips*-*-elf*)
 		if test x$gas = xyes
 		then
-			target_cpu_default2="MASK_GAS|MASK_JUMP_IN_DELAY"
-		fi
-		;;
-
-	mips*-*-*)
-		case ${target} in
-		mips*-*-ecoff* | mips*-*-elf*)
-			if test x$gas = xyes
+			if test x$gnu_ld = xyes
 			then
-				if test x$gnu_ld = xyes
-				then
-					target_cpu_default2="MASK_GAS|MASK_SPLIT_ADDR"
-				else
-					target_cpu_default2="MASK_GAS"
-				fi
-			fi
-			;;
-		mips*-*-*)
-			if test x$gas = xyes
-			then
+				target_cpu_default2="MASK_GAS|MASK_SPLIT_ADDR"
+			else
 				target_cpu_default2="MASK_GAS"
 			fi
-			;;
-		esac
-		case ${target} in
-			mips*el-*-*)
-				tm_defines="TARGET_ENDIAN_DEFAULT=0 $tm_defines"
-				;;
-		esac
-		case $tm_file in
-			*mips/elf.h* | *mips/elf64.h*)
-				tm_defines="OBJECT_FORMAT_ELF $tm_defines"
-				;;
-		esac
-		if test "x$enable_gofast" = xyes
-		then
-			tm_defines="US_SOFTWARE_GOFAST $tm_defines"
-			tmake_file="mips/t-gofast $tmake_file"
-		else
-			tmake_file="mips/t-mips $tmake_file"
 		fi
 		;;
-
-	powerpc*-*-* | rs6000-*-*)
-		if test x$enable_altivec = xyes
+	mips*-*-*)
+		if test x$gas = xyes
 		then
-			tm_file="$tm_file rs6000/altivec-defs.h"
+			target_cpu_default2="MASK_GAS"
 		fi
+		;;
+	esac
+		case ${target} in
+		mips*el-*-*)
+			tm_defines="TARGET_ENDIAN_DEFAULT=0 $tm_defines"
+			;;
+	esac
+	case $tm_file in
+		*mips/elf.h* | *mips/elf64.h*)
+			tm_defines="OBJECT_FORMAT_ELF $tm_defines"
+			;;
+	esac
+	if test "x$enable_gofast" = xyes
+	then
+			tm_defines="US_SOFTWARE_GOFAST $tm_defines"
+		tmake_file="mips/t-gofast $tmake_file"
+	else
+		tmake_file="mips/t-mips $tmake_file"
+	fi
+	;;
+
+powerpc*-*-* | rs6000-*-*)
+        if test x$enable_altivec = xyes
+        then
+                tm_file="$tm_file rs6000/altivec-defs.h"
+        fi
 		# FIXME: The PowerPC port uses the value set at compile time,
 		# although it's only cosmetic.
 		if test "x$with_cpu" != x
-		then
+			then
 			target_cpu_default2="\\\"$with_cpu\\\""
-		fi
+			fi
 		out_file=rs6000/rs6000.c
-		c_target_objs="${c_target_objs} rs6000-c.o"
-		cxx_target_objs="${cxx_target_objs} rs6000-c.o"
+	c_target_objs="${c_target_objs} rs6000-c.o"
+	cxx_target_objs="${cxx_target_objs} rs6000-c.o"
 		tmake_file="rs6000/t-rs6000 ${tmake_file}"
-		;;
+	;;
 
-	sparc*-*-*)
+sparc*-*-*)
 		# Some standard aliases.
 		case x$with_cpu in
 		xsparc)
@@ -2755,22 +2759,22 @@ fi
 		xsparcv9 | xsparc64)
 			with_cpu=v9
 			;;
-		esac
+	esac
 
 		# The Sparc port checks this value at compile-time.
 		target_cpu_default2="TARGET_CPU_$with_cpu"
-		;;
-	v850*-*-*)
+	;;
+v850*-*-*)
 		# FIXME: The v850 is "special" in that it does not support
 		# runtime CPU selection, only --with-cpu.
-		case "x$with_cpu" in
+	case "x$with_cpu" in
 		x)
 			;;
 		xv850e)
 			target_cpu_default2="TARGET_CPU_$with_cpu"
 			;;
 		esac
-		;;
+			;;
 	esac
 
 	t=
@@ -2785,23 +2789,23 @@ fi
 			*)
 				echo "This target does not support --with-$option." 2>&1
 				exit 1
-				;;
-			esac
+	;;
+esac
 
 			if test "x$t" = x
-			then
+then
 				t="{ \"$option\", \"$val\" }"
-			else
+	else
 				t="${t}, { \"$option\", \"$val\" }"
-			fi
-		fi
+	fi
+fi
 	done
 	if test "x$t" = x
-	then
+then
 		configure_default_options="{ { NULL, NULL} }"
-	else
+else
 		configure_default_options="{ ${t} }"
-	fi
+		fi
 
 	if test "$target_cpu_default2" != ""
 	then
@@ -2810,5 +2814,5 @@ fi
 			target_cpu_default="(${target_cpu_default}|${target_cpu_default2})"
 		else
 			target_cpu_default=$target_cpu_default2
-		fi
 	fi
+fi
