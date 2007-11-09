@@ -1321,6 +1321,10 @@ m32rle-*-linux*)
 		thread_file='posix'
 	fi
 	;;
+# JBG
+nios2-*-* | nios2-*-*)
+	tm_file="elfos.h ${tm_file}"
+	;;
 # m68hc11 and m68hc12 share the same machine description.
 m68hc11-*-*|m6811-*-*)
 	tm_file="dbxelf.h elfos.h m68hc11/m68hc11.h"

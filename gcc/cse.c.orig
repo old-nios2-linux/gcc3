@@ -3133,10 +3133,6 @@ find_comparison_args (enum rtx_code code, rtx *parg1, rtx *parg2,
 #ifdef FLOAT_STORE_FLAG_VALUE
 	  REAL_VALUE_TYPE fsfv;
 #endif
-#ifdef __nios2__
-	  if (p->is_const)
-	    break;
-#endif
 
 	  /* If the entry isn't valid, skip it.  */
 	  if (! exp_equiv_p (p->exp, p->exp, 1, 0))

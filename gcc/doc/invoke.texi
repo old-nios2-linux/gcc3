@@ -337,6 +337,14 @@ in the following sections.
 @item Machine Dependent Options
 @xref{Submodel Options,,Hardware Models and Configurations}.
 
+@emph{Altera Nios II Options}
+@gccoptlist{-msmallc -mno-bypass-cache -mbypass-cache @gol
+-mno-cache-volatile -mcache-volatile -mno-inline-memcpy @gol 
+-minline-memcpy -mno-fast-sw-div -mfast-sw-div @gol
+-mhw-mul -mno-hw-mul -mhw-mulx -mno-hw-mulx @gol
+-mno-hw-div -mhw-div @gol
+-msys-crt0= -msys-lib= -msys=nosys }
+
 @emph{M680x0 Options}
 @gccoptlist{-m68000  -m68020  -m68020-40  -m68020-60  -m68030  -m68040 @gol
 -m68060  -mcpu32  -m5200  -m68881  -mbitfield  -mc68000  -mc68020   @gol
@@ -5836,6 +5844,7 @@ machine description.  The default for the options is also defined by
 that macro, which enables you to change the defaults.
 
 @menu
+* Altera Nios II Options::
 * M680x0 Options::
 * M68hc1x Options::
 * VAX Options::
@@ -5870,6 +5879,103 @@ that macro, which enables you to change the defaults.
 * Xtensa Options::
 * FRV Options::
 @end menu
+
+
+@node Altera Nios II Options
+@subsection Altera Nios II Options
+@cindex Altera Nios II options
+
+These are the @samp{-m} options defined for the Altera Nios II 
+processor.
+
+@table @gcctabopt
+
+@item -msmallc
+@opindex msmallc
+
+Link with a limited version of the C library, -lsmallc. For more 
+information see the C Library Documentation.
+
+
+@item -mbypass-cache
+@itemx -mno-bypass-cache
+@opindex mno-bypass-cache
+@opindex mbypass-cache
+
+Force all load and store instructions to always bypass cache by 
+using io variants of the instructions. The default is to not
+bypass the cache.
+
+@item -mno-cache-volatile 
+@itemx -mcache-volatile       
+@opindex mcache-volatile 
+@opindex mno-cache-volatile
+
+Volatile memory access bypass the cache using the io variants of 
+the ld and st instructions. The default is to cache volatile 
+accesses. 
+
+-mno-cache-volatile is deprecated and will be deleted in a 
+future GCC release.
+
+
+@item -mno-inline-memcpy
+@itemx -minline-memcpy
+@opindex mno-inline-memcpy 
+@opindex minline-memcpy
+
+Do not inline memcpy. The default is to inline when -O is on.
+
+
+@item -mno-fast-sw-div
+@itemx -mfast-sw-div
+@opindex mno-fast-sw-div
+@opindex mfast-sw-div
+
+Do no use table based fast divide for small numbers. The default 
+is to use the fast divide at -O3 and above.
+
+
+@item -mno-hw-mul
+@itemx -mhw-mul
+@itemx -mno-hw-mulx
+@itemx -mhw-mulx
+@itemx -mno-hw-div
+@itemx -mhw-div
+@opindex mno-hw-mul
+@opindex mhw-mul
+@opindex mno-hw-mulx
+@opindex mhw-mulx
+@opindex mno-hw-div
+@opindex mhw-div
+
+Enable or disable emitting @code{mul}, @code{mulx} and @code{div} family of 
+instructions by the compiler. The default is to emit @code{mul}
+and not emit @code{div} and @code{mulx}.
+
+The different combinations of @code{mul} and @code{mulx} instructions 
+generate a different multilib options. 
+
+
+@item -msys-crt0=@var{startfile}
+@opindex msys-crt0
+
+@var{startfile} is the file name  of the startfile (crt0) to use 
+when linking. The default is crt0.o that comes with libgloss
+and is only suitable for use with the instruction set
+simulator.
+
+@item -msys-lib=@var{systemlib}
+@itemx -msys-lib=nosys
+@opindex msys-lib
+
+@var{systemlib} is the library name of the library which provides
+the system calls required by the C library, e.g. @code{read}, @code{write}
+etc. The default is to use nosys, this library provides
+stub implementations of the calls and is part of libgloss.
+
+@end table
+
 
 @node M680x0 Options
 @subsection M680x0 Options
