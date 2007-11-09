@@ -47,6 +47,7 @@ Boston, MA 02111-1307, USA.  */
 #include "optabs.h"
 #include "target.h"
 #include "target-def.h"
+#include "c-pragma.h"           /* for c_register_pragma */
 
 /* local prototypes */
 static bool nios2_rtx_costs (rtx, int, int, int *);
@@ -59,6 +60,16 @@ static bool nios2_in_small_data_p (tree);
 static rtx save_reg (int, HOST_WIDE_INT, rtx);
 static rtx restore_reg (int, HOST_WIDE_INT);
 static unsigned int nios2_section_type_flags (tree, const char *, int);
+
+/* 0 --> no #pragma seen
+   1 --> in scope of #pragma reverse_bitfields
+   -1 --> in scope of #pragma no_reverse_bitfields */
+static int nios2_pragma_reverse_bitfields_flag = 0;
+static void nios2_pragma_reverse_bitfields (struct cpp_reader *);
+static void nios2_pragma_no_reverse_bitfields (struct cpp_reader *);
+static tree nios2_handle_struct_attribute (tree *, tree, tree, int, bool *);
+static void nios2_insert_attributes (tree, tree *);
+static bool nios2_reverse_bitfield_layout_p (tree record_type);
 static void nios2_init_builtins (void);
 static rtx nios2_expand_builtin (tree, rtx, rtx, enum machine_mode, int);
 static bool nios2_function_ok_for_sibcall (tree, tree);
@@ -80,6 +91,9 @@ static void nios2_encode_section_info (tree, rtx, int);
 #undef  TARGET_SECTION_TYPE_FLAGS
 #define TARGET_SECTION_TYPE_FLAGS  nios2_section_type_flags
 
+#undef TARGET_REVERSE_BITFIELD_LAYOUT_P
+#define TARGET_REVERSE_BITFIELD_LAYOUT_P nios2_reverse_bitfield_layout_p
+
 #undef TARGET_INIT_BUILTINS
 #define TARGET_INIT_BUILTINS nios2_init_builtins
 #undef TARGET_EXPAND_BUILTIN
@@ -90,6 +104,25 @@ static void nios2_encode_section_info (tree, rtx, int);
 
 #undef TARGET_RTX_COSTS
 #define TARGET_RTX_COSTS nios2_rtx_costs
+
+const struct attribute_spec nios2_attribute_table[] =
+{
+  /* { name, min_len, max_len, decl_req, type_req, fn_type_req, handler } */
+  { "reverse_bitfields",    0, 0, false, false,  false, nios2_handle_struct_attribute },
+  { "no_reverse_bitfields", 0, 0, false, false,  false, nios2_handle_struct_attribute },
+  { "pragma_reverse_bitfields",    0, 0, false, false,  false, NULL },
+  { "pragma_no_reverse_bitfields", 0, 0, false, false,  false, NULL },
+  { NULL,        0, 0, false, false, false, NULL }
+};
+
+#undef TARGET_ATTRIBUTE_TABLE
+#define TARGET_ATTRIBUTE_TABLE nios2_attribute_table
+
+#undef  TARGET_INSERT_ATTRIBUTES
+#define TARGET_INSERT_ATTRIBUTES nios2_insert_attributes
+
+
+
 
 
 struct gcc_target targetm = TARGET_INITIALIZER;
@@ -109,14 +142,14 @@ unsigned HOST_WIDE_INT nios2_section_threshold = NIOS2_DEFAULT_GVALUE;
 struct nios2_frame_info
 GTY (())
 {
-  long total_size;		/* # bytes that the entire frame takes up */
-  long var_size;		/* # bytes that variables take up */
-  long args_size;		/* # bytes that outgoing arguments take up */
-  int save_reg_size;		/* # bytes needed to store gp regs */
-  int save_reg_rounded;		/* # bytes needed to store gp regs */
-  long save_regs_offset;	/* offset from new sp to store gp registers */
-  int initialized;		/* != 0 if frame size already calculated */
-  int num_regs;			/* number of gp registers saved */
+  long total_size;      /* # bytes that the entire frame takes up */
+  long var_size;        /* # bytes that variables take up */
+  long args_size;       /* # bytes that outgoing arguments take up */
+  int save_reg_size;        /* # bytes needed to store gp regs */
+  int save_reg_rounded;     /* # bytes needed to store gp regs */
+  long save_regs_offset;    /* offset from new sp to store gp registers */
+  int initialized;      /* != 0 if frame size already calculated */
+  int num_regs;         /* number of gp registers saved */
 };
 
 struct machine_function
@@ -176,12 +209,12 @@ save_reg (int regno, HOST_WIDE_INT offset, rtx cfa_store_reg)
   rtx insn, stack_slot;
 
   stack_slot = gen_rtx_PLUS (SImode,
-			     cfa_store_reg,
-			     GEN_INT (offset));
+                 cfa_store_reg,
+                 GEN_INT (offset));
 
   insn = emit_insn (gen_rtx_SET (SImode,
-				 gen_rtx_MEM (SImode, stack_slot),
-				 gen_rtx_REG (SImode, regno)));
+                 gen_rtx_MEM (SImode, stack_slot),
+                 gen_rtx_REG (SImode, regno)));
 
   RTX_FRAME_RELATED_P (insn) = 1;
 
@@ -197,20 +230,20 @@ restore_reg (int regno, HOST_WIDE_INT offset)
     {
       stack_slot = gen_rtx_REG (SImode, TEMP_REG_NUM);
       insn = emit_insn (gen_rtx_SET (SImode,
-				     stack_slot,
-				     GEN_INT (offset)));
+                     stack_slot,
+                     GEN_INT (offset)));
 
       insn = emit_insn (gen_rtx_SET (SImode,
-				     stack_slot,
+                     stack_slot,
                                      gen_rtx_PLUS (SImode,
-				                   stack_slot,
-				                   stack_pointer_rtx)));
+                                   stack_slot,
+                                   stack_pointer_rtx)));
     }
   else
     {
       stack_slot = gen_rtx_PLUS (SImode,
-			         stack_pointer_rtx,
-				 GEN_INT (offset));
+                     stack_pointer_rtx,
+                 GEN_INT (offset));
     }
 
   stack_slot = gen_rtx_MEM (SImode, stack_slot);
@@ -236,21 +269,21 @@ dwarf2out.c for more explanation of the "rules."
 
 Case 1:
 Rule #  Example Insn                       Effect
-2  	addi	sp, sp, -total_frame_size  cfa.reg=sp, cfa.offset=total_frame_size
+2   addi    sp, sp, -total_frame_size  cfa.reg=sp, cfa.offset=total_frame_size
                                            cfa_store.reg=sp, cfa_store.offset=total_frame_size
-12  	stw	ra, offset(sp)		   
-12  	stw	r16, offset(sp)
-1  	mov	fp, sp
+12      stw ra, offset(sp)         
+12      stw r16, offset(sp)
+1   mov fp, sp
   
 Case 2: 
 Rule #  Example Insn                       Effect
-6 	movi	r8, total_frame_size       cfa_temp.reg=r8, cfa_temp.offset=total_frame_size
-2  	sub	sp, sp, r8                 cfa.reg=sp, cfa.offset=total_frame_size
+6   movi    r8, total_frame_size       cfa_temp.reg=r8, cfa_temp.offset=total_frame_size
+2   sub sp, sp, r8                 cfa.reg=sp, cfa.offset=total_frame_size
                                            cfa_store.reg=sp, cfa_store.offset=total_frame_size
-5   	add	r8, r8, sp                 cfa_store.reg=r8, cfa_store.offset=0
-12  	stw	ra, offset(r8)
-12  	stw	r16, offset(r8)
-1  	mov	fp, sp
+5       add r8, r8, sp                 cfa_store.reg=r8, cfa_store.offset=0
+12      stw ra, offset(r8)
+12      stw r16, offset(r8)
+1   mov fp, sp
 
 */
 
@@ -269,66 +302,66 @@ expand_prologue ()
     {
 
       if (TOO_BIG_OFFSET (total_frame_size)) 
-	{
-	    /* cfa_temp and cfa_store_reg are the same register,
-	       cfa_store_reg overwrites cfa_temp */
-	    cfa_store_reg = gen_rtx_REG (SImode, TEMP_REG_NUM);
-	    insn = emit_insn (gen_rtx_SET (SImode,
-					   cfa_store_reg,
-					   GEN_INT (total_frame_size)));
+    {
+        /* cfa_temp and cfa_store_reg are the same register,
+           cfa_store_reg overwrites cfa_temp */
+        cfa_store_reg = gen_rtx_REG (SImode, TEMP_REG_NUM);
+        insn = emit_insn (gen_rtx_SET (SImode,
+                       cfa_store_reg,
+                       GEN_INT (total_frame_size)));
 
-	    RTX_FRAME_RELATED_P (insn) = 1;
-
-
-	    insn = gen_rtx_SET (SImode,
-				stack_pointer_rtx,
-				gen_rtx_MINUS (SImode,
-					       stack_pointer_rtx,
-					       cfa_store_reg));
-
-	    insn = emit_insn (insn);
-	    RTX_FRAME_RELATED_P (insn) = 1;
+        RTX_FRAME_RELATED_P (insn) = 1;
 
 
-	    /* if there are no registers to save, I don't need to
-	       create a cfa_store */
-	    if (cfun->machine->frame.save_reg_size) 
-	      {
-		insn = gen_rtx_SET (SImode,
-				    cfa_store_reg,
-				    gen_rtx_PLUS (SImode,
-						  cfa_store_reg,
-						  stack_pointer_rtx));
+        insn = gen_rtx_SET (SImode,
+                stack_pointer_rtx,
+                gen_rtx_MINUS (SImode,
+                           stack_pointer_rtx,
+                           cfa_store_reg));
 
-		insn = emit_insn (insn);
-		RTX_FRAME_RELATED_P (insn) = 1;
-	      }
+        insn = emit_insn (insn);
+        RTX_FRAME_RELATED_P (insn) = 1;
 
-	    cfa_store_offset 
-	      = total_frame_size 
-		- (cfun->machine->frame.save_regs_offset
-		   + cfun->machine->frame.save_reg_rounded);
-	}
+
+        /* if there are no registers to save, I don't need to
+           create a cfa_store */
+        if (cfun->machine->frame.save_reg_size) 
+          {
+        insn = gen_rtx_SET (SImode,
+                    cfa_store_reg,
+                    gen_rtx_PLUS (SImode,
+                          cfa_store_reg,
+                          stack_pointer_rtx));
+
+        insn = emit_insn (insn);
+        RTX_FRAME_RELATED_P (insn) = 1;
+          }
+
+        cfa_store_offset 
+          = total_frame_size 
+        - (cfun->machine->frame.save_regs_offset
+           + cfun->machine->frame.save_reg_rounded);
+    }
       else
-	{
-	    insn = gen_rtx_SET (SImode,
-				stack_pointer_rtx,
-				gen_rtx_PLUS (SImode,
-					      stack_pointer_rtx,
-					      GEN_INT (-total_frame_size)));
-	    insn = emit_insn (insn);
-	    RTX_FRAME_RELATED_P (insn) = 1;
+    {
+        insn = gen_rtx_SET (SImode,
+                stack_pointer_rtx,
+                gen_rtx_PLUS (SImode,
+                          stack_pointer_rtx,
+                          GEN_INT (-total_frame_size)));
+        insn = emit_insn (insn);
+        RTX_FRAME_RELATED_P (insn) = 1;
 
-	    cfa_store_reg = stack_pointer_rtx;
-	    cfa_store_offset 
-	      = cfun->machine->frame.save_regs_offset
-		+ cfun->machine->frame.save_reg_rounded;
-	}
+        cfa_store_reg = stack_pointer_rtx;
+        cfa_store_offset 
+          = cfun->machine->frame.save_regs_offset
+        + cfun->machine->frame.save_reg_rounded;
+    }
 
       if (current_function_limit_stack)
-	{
-	  emit_insn (gen_stack_overflow_detect_and_trap ());
-	}
+    {
+      emit_insn (gen_stack_overflow_detect_and_trap ());
+    }
     }
 
   if (MUST_SAVE_REGISTER (RA_REGNO))
@@ -345,17 +378,17 @@ expand_prologue ()
   for (i = 0; i < FIRST_PSEUDO_REGISTER; i++)
     {
       if (MUST_SAVE_REGISTER (i) && i != FP_REGNO && i != RA_REGNO)
-	{
-	  cfa_store_offset -= 4;
-	  save_reg (i, cfa_store_offset, cfa_store_reg);
-	}
+    {
+      cfa_store_offset -= 4;
+      save_reg (i, cfa_store_offset, cfa_store_reg);
+    }
     }
 
   if (frame_pointer_needed)
     {
       insn = emit_insn (gen_rtx_SET (SImode,
-				     gen_rtx_REG (SImode, FP_REGNO),
-				     gen_rtx_REG (SImode, SP_REGNO)));
+                     gen_rtx_REG (SImode, FP_REGNO),
+                     gen_rtx_REG (SImode, SP_REGNO)));
 
       RTX_FRAME_RELATED_P (insn) = 1;
     }
@@ -403,10 +436,10 @@ expand_epilogue (bool sibcall_p)
   for (i = 0; i < FIRST_PSEUDO_REGISTER; i++)
     {
       if (MUST_SAVE_REGISTER (i) && i != FP_REGNO && i != RA_REGNO)
-	{
-	  register_store_offset -= 4;
-	  restore_reg (i, register_store_offset);
-	}
+    {
+      register_store_offset -= 4;
+      restore_reg (i, register_store_offset);
+    }
     }
 
   if (total_frame_size)
@@ -415,22 +448,22 @@ expand_epilogue (bool sibcall_p)
 
       if (TOO_BIG_OFFSET (total_frame_size))
         {
-	  sp_adjust = gen_rtx_REG (SImode, TEMP_REG_NUM);
-	  insn = emit_insn (gen_rtx_SET (SImode,
-					 sp_adjust,
-					 GEN_INT (total_frame_size)));
+      sp_adjust = gen_rtx_REG (SImode, TEMP_REG_NUM);
+      insn = emit_insn (gen_rtx_SET (SImode,
+                     sp_adjust,
+                     GEN_INT (total_frame_size)));
 
-      	}
+        }
       else
         {
-	  sp_adjust = GEN_INT (total_frame_size);
-	}
+      sp_adjust = GEN_INT (total_frame_size);
+    }
 
       insn = gen_rtx_SET (SImode,
-			  stack_pointer_rtx,
-			  gen_rtx_PLUS (SImode,
-					stack_pointer_rtx,
-					sp_adjust));
+              stack_pointer_rtx,
+              gen_rtx_PLUS (SImode,
+                    stack_pointer_rtx,
+                    sp_adjust));
       insn = emit_insn (insn);
     }
 
@@ -438,7 +471,7 @@ expand_epilogue (bool sibcall_p)
   if (!sibcall_p)
     {
       insn = emit_jump_insn (gen_return_from_epilogue (gen_rtx (REG, Pmode,
-								RA_REGNO)));
+                                RA_REGNO)));
     }
 }
 
@@ -477,27 +510,27 @@ dump_frame_size (FILE *file)
   fprintf (file, "\t%s Current Frame Info\n", ASM_COMMENT_START);
 
   fprintf (file, "\t%s total_size = %ld\n", ASM_COMMENT_START,
-	   cfun->machine->frame.total_size);
+       cfun->machine->frame.total_size);
   fprintf (file, "\t%s var_size = %ld\n", ASM_COMMENT_START,
-	   cfun->machine->frame.var_size);
+       cfun->machine->frame.var_size);
   fprintf (file, "\t%s args_size = %ld\n", ASM_COMMENT_START,
-	   cfun->machine->frame.args_size);
+       cfun->machine->frame.args_size);
   fprintf (file, "\t%s save_reg_size = %d\n", ASM_COMMENT_START,
-	   cfun->machine->frame.save_reg_size);
+       cfun->machine->frame.save_reg_size);
   fprintf (file, "\t%s save_reg_rounded = %d\n", ASM_COMMENT_START,
-	   cfun->machine->frame.save_reg_rounded);
+       cfun->machine->frame.save_reg_rounded);
   fprintf (file, "\t%s initialized = %d\n", ASM_COMMENT_START,
-	   cfun->machine->frame.initialized);
+       cfun->machine->frame.initialized);
   fprintf (file, "\t%s num_regs = %d\n", ASM_COMMENT_START,
-	   cfun->machine->frame.num_regs);
+       cfun->machine->frame.num_regs);
   fprintf (file, "\t%s save_regs_offset = %ld\n", ASM_COMMENT_START,
-	   cfun->machine->frame.save_regs_offset);
+       cfun->machine->frame.save_regs_offset);
   fprintf (file, "\t%s current_function_is_leaf = %d\n", ASM_COMMENT_START,
-	   current_function_is_leaf);
+       current_function_is_leaf);
   fprintf (file, "\t%s frame_pointer_needed = %d\n", ASM_COMMENT_START,
-	   frame_pointer_needed);
+       frame_pointer_needed);
   fprintf (file, "\t%s pretend_args_size = %d\n", ASM_COMMENT_START,
-	   current_function_pretend_args_size);
+       current_function_pretend_args_size);
 
 }
 
@@ -510,12 +543,12 @@ HOST_WIDE_INT
 compute_frame_size ()
 {
   unsigned int regno;
-  HOST_WIDE_INT var_size;	/* # of var. bytes allocated */
-  HOST_WIDE_INT total_size;	/* # bytes that the entire frame takes up */
-  HOST_WIDE_INT save_reg_size;	/* # bytes needed to store callee save regs */
-  HOST_WIDE_INT save_reg_rounded;	
+  HOST_WIDE_INT var_size;   /* # of var. bytes allocated */
+  HOST_WIDE_INT total_size; /* # bytes that the entire frame takes up */
+  HOST_WIDE_INT save_reg_size;  /* # bytes needed to store callee save regs */
+  HOST_WIDE_INT save_reg_rounded;   
     /* # bytes needed to store callee save regs (rounded) */
-  HOST_WIDE_INT out_args_size;	/* # bytes needed for outgoing args */
+  HOST_WIDE_INT out_args_size;  /* # bytes needed for outgoing args */
 
   save_reg_size = 0;
   var_size = STACK_ALIGN (get_frame_size ());
@@ -527,9 +560,9 @@ compute_frame_size ()
   for (regno = 0; regno <= FIRST_PSEUDO_REGISTER; regno++)
     {
       if (MUST_SAVE_REGISTER (regno))
-	{
-	  save_reg_size += 4;
-	}
+    {
+      save_reg_size += 4;
+    }
     }
 
   save_reg_rounded = STACK_ALIGN (save_reg_size);
@@ -663,7 +696,7 @@ static struct machine_function *
 nios2_init_machine_status ()
 {
   return ((struct machine_function *)
-	  ggc_alloc_cleared (sizeof (struct machine_function)));
+      ggc_alloc_cleared (sizeof (struct machine_function)));
 }
 
 
@@ -684,50 +717,50 @@ nios2_rtx_costs (rtx x, int code, int outer_code ATTRIBUTE_UNUSED, int *total)
   switch (code)
     {
       case CONST_INT:
-	if (INTVAL (x) == 0)
-	  {
-	    *total = COSTS_N_INSNS (0);
-	    return true;
-	  }
-	else if (SMALL_INT (INTVAL (x))
-		|| SMALL_INT_UNSIGNED (INTVAL (x))
-		|| UPPER16_INT (INTVAL (x)))
-	  {
-	    *total = COSTS_N_INSNS (2);
-	    return true;
-	  }
-	else
-	  {
-	    *total = COSTS_N_INSNS (4);
-	    return true;
-	  }
+    if (INTVAL (x) == 0)
+      {
+        *total = COSTS_N_INSNS (0);
+        return true;
+      }
+    else if (SMALL_INT (INTVAL (x))
+        || SMALL_INT_UNSIGNED (INTVAL (x))
+        || UPPER16_INT (INTVAL (x)))
+      {
+        *total = COSTS_N_INSNS (2);
+        return true;
+      }
+    else
+      {
+        *total = COSTS_N_INSNS (4);
+        return true;
+      }
 
       case LABEL_REF:
       case SYMBOL_REF:
-	/* ??? gp relative stuff will fit in here */
-	/* fall through */
+    /* ??? gp relative stuff will fit in here */
+    /* fall through */
       case CONST:
       case CONST_DOUBLE:
-	{
-	  *total = COSTS_N_INSNS (4);
-	  return true;
-	}
+    {
+      *total = COSTS_N_INSNS (4);
+      return true;
+    }
 
       case MULT:
-	{
-	  *total = COSTS_N_INSNS (1);
-	  return false;
-	}
+    {
+      *total = COSTS_N_INSNS (1);
+      return false;
+    }
       case SIGN_EXTEND:
-	{
-	  *total = COSTS_N_INSNS (3);
-	  return false;
-	}
+    {
+      *total = COSTS_N_INSNS (3);
+      return false;
+    }
       case ZERO_EXTEND:
-	{
-	  *total = COSTS_N_INSNS (1);
-	  return false;
-	}
+    {
+      *total = COSTS_N_INSNS (1);
+      return false;
+    }
 
     default:
       return false;
@@ -752,7 +785,7 @@ nios2_emit_move_sequence (rtx *operands, enum machine_mode mode)
   if (!register_operand (to, mode) && !reg_or_0_operand (from, mode))
     {
       if (no_new_pseudos)
-	internal_error ("Trying to force_reg no_new_pseudos == 1");
+    internal_error ("Trying to force_reg no_new_pseudos == 1");
       from = copy_to_mode_reg (mode, from);
     }
 
@@ -784,18 +817,18 @@ nios2_emit_move_sequence (rtx *operands, enum machine_mode mode)
 
   This bit of expansion is to create this instruction
   sequence as rtl.
-	or	$8, $4, $5
-	slli	$9, $4, 4
-	cmpgeui	$3, $8, 16
-	beq	$3, $0, .L3
-	or	$10, $9, $5
-	add	$12, $11, divide_table
-	ldbu	$2, 0($12)
-	br	.L1
+    or  $8, $4, $5
+    slli    $9, $4, 4
+    cmpgeui $3, $8, 16
+    beq $3, $0, .L3
+    or  $10, $9, $5
+    add $12, $11, divide_table
+    ldbu    $2, 0($12)
+    br  .L1
 .L3:
-	call	slow_div
+    call    slow_div
 .L1:
-#	continue here with result in $2
+#   continue here with result in $2
 
   ??? Ideally I would like the emit libcall block to contain
   all of this code, but I don't know how to do that. What it
@@ -831,27 +864,27 @@ nios2_emit_expensive_div (rtx *operands, enum machine_mode mode)
   lab3 = gen_label_rtx ();
 
   or_result = expand_simple_binop (SImode, IOR,
-				   operands[1], operands[2],
-				   0, 0, OPTAB_LIB_WIDEN);
+                   operands[1], operands[2],
+                   0, 0, OPTAB_LIB_WIDEN);
 
   emit_cmp_and_jump_insns (or_result, GEN_INT (15), GTU, 0,
-			   GET_MODE (or_result), 0, lab3);
+               GET_MODE (or_result), 0, lab3);
   JUMP_LABEL (get_last_insn ()) = lab3;
 
   shift_left_result = expand_simple_binop (SImode, ASHIFT,
-					   operands[1], GEN_INT (4),
-					   0, 0, OPTAB_LIB_WIDEN);
+                       operands[1], GEN_INT (4),
+                       0, 0, OPTAB_LIB_WIDEN);
 
   lookup_value = expand_simple_binop (SImode, IOR,
-				      shift_left_result, operands[2],
-				      0, 0, OPTAB_LIB_WIDEN);
+                      shift_left_result, operands[2],
+                      0, 0, OPTAB_LIB_WIDEN);
 
   convert_move (operands[0],
-		gen_rtx (MEM, QImode,
-			 gen_rtx (PLUS, SImode,
-				  lookup_value,
-				  gen_rtx_SYMBOL_REF (SImode, "__divsi3_table"))),
-		1);
+        gen_rtx (MEM, QImode,
+             gen_rtx (PLUS, SImode,
+                  lookup_value,
+                  gen_rtx_SYMBOL_REF (SImode, "__divsi3_table"))),
+        1);
 
 
   tmp = emit_jump_insn (gen_jump (lab1));
@@ -863,15 +896,15 @@ nios2_emit_expensive_div (rtx *operands, enum machine_mode mode)
 
   start_sequence ();
   final_result = emit_library_call_value (libfunc, NULL_RTX,
-					  LCT_CONST, SImode, 2,
-					  operands[1], SImode,
-					  operands[2], SImode);
+                      LCT_CONST, SImode, 2,
+                      operands[1], SImode,
+                      operands[2], SImode);
 
 
   insns = get_insns ();
   end_sequence ();
   emit_libcall_block (insns, operands[0], final_result,
-		      gen_rtx (DIV, SImode, operands[1], operands[2]));
+              gen_rtx (DIV, SImode, operands[1], operands[2]));
 
   emit_label (lab1);
   LABEL_NUSES (lab1) = 1;
@@ -962,26 +995,26 @@ map_test_to_internal_test (enum rtx_code test_code)
 
 void
 gen_int_relational (enum rtx_code test_code, /* relational test (EQ, etc) */
-		    rtx result,		/* result to store comp. or 0 if branch */
-		    rtx cmp0,		/* first operand to compare */
-		    rtx cmp1,		/* second operand to compare */
-		    rtx destination)	/* destination of the branch, or 0 if compare */
+            rtx result,     /* result to store comp. or 0 if branch */
+            rtx cmp0,       /* first operand to compare */
+            rtx cmp1,       /* second operand to compare */
+            rtx destination)    /* destination of the branch, or 0 if compare */
 {
   struct cmp_info
   {
     /* for register (or 0) compares */
-    enum rtx_code test_code_reg;	/* code to use in instruction (LT vs. LTU) */
-    int reverse_regs;		/* reverse registers in test */
+    enum rtx_code test_code_reg;    /* code to use in instruction (LT vs. LTU) */
+    int reverse_regs;       /* reverse registers in test */
 
     /* for immediate compares */
-    enum rtx_code test_code_const;	
+    enum rtx_code test_code_const;  
          /* code to use in instruction (LT vs. LTU) */
-    int const_low;		/* low bound of constant we can accept */
-    int const_high;		/* high bound of constant we can accept */
-    int const_add;		/* constant to add */
+    int const_low;      /* low bound of constant we can accept */
+    int const_high;     /* high bound of constant we can accept */
+    int const_add;      /* constant to add */
 
     /* generic info */
-    int unsignedp;		/* != 0 for unsigned comparisons.  */
+    int unsignedp;      /* != 0 for unsigned comparisons.  */
   };
 
   static const struct cmp_info info[(int) ITEST_MAX] = {
@@ -1032,7 +1065,7 @@ gen_int_relational (enum rtx_code test_code, /* relational test (EQ, etc) */
       HOST_WIDE_INT value = INTVAL (cmp1);
 
       if (value < p_info->const_low || value > p_info->const_high)
-	cmp1 = force_reg (mode, cmp1);
+    cmp1 = force_reg (mode, cmp1);
     }
 
   /* Comparison to constants, may involve adding 1 to change a GT into GE.
@@ -1040,25 +1073,25 @@ gen_int_relational (enum rtx_code test_code, /* relational test (EQ, etc) */
   if (GET_CODE (cmp1) == CONST_INT)
     {
       if (p_info->const_add != 0)
-	{
-	  HOST_WIDE_INT new = INTVAL (cmp1) + p_info->const_add;
+    {
+      HOST_WIDE_INT new = INTVAL (cmp1) + p_info->const_add;
 
-	  /* If modification of cmp1 caused overflow,
-	     we would get the wrong answer if we follow the usual path;
-	     thus, x > 0xffffffffU would turn into x > 0U.  */
-	  if ((p_info->unsignedp
-	       ? (unsigned HOST_WIDE_INT) new >
-	       (unsigned HOST_WIDE_INT) INTVAL (cmp1)
-	       : new > INTVAL (cmp1)) != (p_info->const_add > 0))
-	    {
-	      /* ??? This case can never happen with the current numbers,
-	         but I am paranoid and would rather an abort than
-	         a bug I will never find */
-	      abort ();
-	    }
-	  else
-	    cmp1 = GEN_INT (new);
-	}
+      /* If modification of cmp1 caused overflow,
+         we would get the wrong answer if we follow the usual path;
+         thus, x > 0xffffffffU would turn into x > 0U.  */
+      if ((p_info->unsignedp
+           ? (unsigned HOST_WIDE_INT) new >
+           (unsigned HOST_WIDE_INT) INTVAL (cmp1)
+           : new > INTVAL (cmp1)) != (p_info->const_add > 0))
+        {
+          /* ??? This case can never happen with the current numbers,
+             but I am paranoid and would rather an abort than
+             a bug I will never find */
+          abort ();
+        }
+      else
+        cmp1 = GEN_INT (new);
+    }
     }
 
   else if (p_info->reverse_regs)
@@ -1073,48 +1106,48 @@ gen_int_relational (enum rtx_code test_code, /* relational test (EQ, etc) */
   if (branch_p)
     {
       if (register_operand (cmp0, mode) && register_operand (cmp1, mode))
-	{
-	  rtx insn;
-	  rtx cond = gen_rtx (p_info->test_code_reg, mode, cmp0, cmp1);
-	  rtx label = gen_rtx_LABEL_REF (VOIDmode, destination);
+    {
+      rtx insn;
+      rtx cond = gen_rtx (p_info->test_code_reg, mode, cmp0, cmp1);
+      rtx label = gen_rtx_LABEL_REF (VOIDmode, destination);
 
-	  insn = gen_rtx_SET (VOIDmode, pc_rtx,
-			      gen_rtx_IF_THEN_ELSE (VOIDmode,
-						    cond, label, pc_rtx));
-	  emit_jump_insn (insn);
-	}
+      insn = gen_rtx_SET (VOIDmode, pc_rtx,
+                  gen_rtx_IF_THEN_ELSE (VOIDmode,
+                            cond, label, pc_rtx));
+      emit_jump_insn (insn);
+    }
       else
-	{
-	  rtx cond, label;
+    {
+      rtx cond, label;
 
-	  result = gen_reg_rtx (mode);
+      result = gen_reg_rtx (mode);
 
-	  emit_move_insn (result,
-			  gen_rtx (p_info->test_code_const, mode, cmp0,
-				   cmp1));
+      emit_move_insn (result,
+              gen_rtx (p_info->test_code_const, mode, cmp0,
+                   cmp1));
 
-	  cond = gen_rtx (NE, mode, result, const0_rtx);
-	  label = gen_rtx_LABEL_REF (VOIDmode, destination);
+      cond = gen_rtx (NE, mode, result, const0_rtx);
+      label = gen_rtx_LABEL_REF (VOIDmode, destination);
 
-	  emit_jump_insn (gen_rtx_SET (VOIDmode, pc_rtx,
-				       gen_rtx_IF_THEN_ELSE (VOIDmode,
-							     cond,
-							     label, pc_rtx)));
-	}
+      emit_jump_insn (gen_rtx_SET (VOIDmode, pc_rtx,
+                       gen_rtx_IF_THEN_ELSE (VOIDmode,
+                                 cond,
+                                 label, pc_rtx)));
+    }
     }
   else
     {
       if (register_operand (cmp0, mode) && register_operand (cmp1, mode))
-	{
-	  emit_move_insn (result,
-			  gen_rtx (p_info->test_code_reg, mode, cmp0, cmp1));
-	}
+    {
+      emit_move_insn (result,
+              gen_rtx (p_info->test_code_reg, mode, cmp0, cmp1));
+    }
       else
-	{
-	  emit_move_insn (result,
-			  gen_rtx (p_info->test_code_const, mode, cmp0,
-				   cmp1));
-	}
+    {
+      emit_move_insn (result,
+              gen_rtx (p_info->test_code_const, mode, cmp0,
+                   cmp1));
+    }
     }
 
 }
@@ -1146,12 +1179,12 @@ gen_conditional_move (rtx *operands, enum machine_mode mode)
     }
   else
     gen_int_relational (cmp_code, cmp_reg, branch_cmp[0], branch_cmp[1],
-			NULL_RTX);
+            NULL_RTX);
 
   cond = gen_rtx (move_code, VOIDmode, cmp_reg, CONST0_RTX (mode));
   insn = gen_rtx_SET (mode, operands[0],
-		      gen_rtx_IF_THEN_ELSE (mode,
-					    cond, operands[2], operands[3]));
+              gen_rtx_IF_THEN_ELSE (mode,
+                        cond, operands[2], operands[3]));
   emit_insn (insn);
 }
 
@@ -1173,7 +1206,7 @@ nios2_legitimate_address (rtx operand, enum machine_mode mode ATTRIBUTE_UNUSED,
         {
           ret_val = 1;
           break;
-	}
+    }
       /* else, fall through */
     case LABEL_REF:
     case CONST_INT:
@@ -1192,19 +1225,19 @@ nios2_legitimate_address (rtx operand, enum machine_mode mode ATTRIBUTE_UNUSED,
       /* Register indirect with displacement */
     case PLUS:
       {
-	rtx op0 = XEXP (operand, 0);
-	rtx op1 = XEXP (operand, 1);
+    rtx op0 = XEXP (operand, 0);
+    rtx op1 = XEXP (operand, 1);
 
-	if (REG_P (op0) && REG_P (op1))
-	  ret_val = 0;
-	else if (REG_P (op0) && CONSTANT_P (op1))
-	  ret_val = REG_OK_FOR_BASE_P2 (op0, strict)
-	    && SMALL_INT (INTVAL (op1));
-	else if (REG_P (op1) && CONSTANT_P (op0))
-	  ret_val = REG_OK_FOR_BASE_P2 (op1, strict)
-	    && SMALL_INT (INTVAL (op0));
-	else
-	  ret_val = 0;
+    if (REG_P (op0) && REG_P (op1))
+      ret_val = 0;
+    else if (REG_P (op0) && GET_CODE (op1) == CONST_INT)
+      ret_val = REG_OK_FOR_BASE_P2 (op0, strict)
+        && SMALL_INT (INTVAL (op1));
+    else if (REG_P (op1) && GET_CODE (op0) == CONST_INT)
+      ret_val = REG_OK_FOR_BASE_P2 (op1, strict)
+        && SMALL_INT (INTVAL (op0));
+    else
+      ret_val = 0;
       }
       break;
 
@@ -1232,10 +1265,10 @@ nios2_in_small_data_p (tree exp)
          an array in some header file */
       if (nios2_section_threshold > 0
           && (strcmp (section, ".sbss") == 0
-	      || strncmp (section, ".sbss.", 6) == 0
-	      || strcmp (section, ".sdata") == 0
-	      || strncmp (section, ".sdata.", 7) == 0))
-	return true;
+          || strncmp (section, ".sbss.", 6) == 0
+          || strcmp (section, ".sdata") == 0
+          || strncmp (section, ".sdata.", 7) == 0))
+    return true;
     }
   else if (TREE_CODE (exp) == VAR_DECL)
     {
@@ -1244,7 +1277,7 @@ nios2_in_small_data_p (tree exp)
       /* If this is an incomplete type with size 0, then we can't put it
          in sdata because it might be too big when completed.  */
       if (size > 0 && size <= nios2_section_threshold)
-	return true;
+    return true;
     }
 
   return false;
@@ -1294,7 +1327,142 @@ nios2_section_type_flags (tree decl, const char *name, int reloc)
   return flags;
 }
 
+/* Handle a #pragma reverse_bitfields */
+static void
+nios2_pragma_reverse_bitfields (struct cpp_reader *pfile ATTRIBUTE_UNUSED)
+{
+  nios2_pragma_reverse_bitfields_flag = 1; /* Reverse */
+}
 
+/* Handle a #pragma no_reverse_bitfields */
+static void
+nios2_pragma_no_reverse_bitfields (struct cpp_reader *pfile ATTRIBUTE_UNUSED)
+{
+  nios2_pragma_reverse_bitfields_flag = -1; /* Forward */
+}
+
+void
+nios2_register_target_pragmas ()
+{
+  c_register_pragma (0, "reverse_bitfields",
+                     nios2_pragma_reverse_bitfields);
+  c_register_pragma (0, "no_reverse_bitfields",
+                     nios2_pragma_no_reverse_bitfields);
+}
+
+/* Handle a "reverse_bitfields" or "no_reverse_bitfields" attribute.
+   ??? What do these attributes mean on a union? */
+static tree
+nios2_handle_struct_attribute (tree *node, tree name,
+                               tree args ATTRIBUTE_UNUSED,
+                               int flags ATTRIBUTE_UNUSED,
+                               bool *no_add_attrs)
+{
+  tree *type = NULL;
+  if (DECL_P (*node))
+    {
+      if (TREE_CODE (*node) == TYPE_DECL)
+        {
+          type = &TREE_TYPE (*node);
+        }
+    }
+  else
+    {
+      type = node;
+    }
+
+  if (!(type && (TREE_CODE (*type) == RECORD_TYPE
+                 || TREE_CODE (*type) == UNION_TYPE)))
+    {
+      warning ("`%s' attribute ignored", IDENTIFIER_POINTER (name));
+      *no_add_attrs = true;
+    }
+
+  else if ((is_attribute_p ("reverse_bitfields", name)
+            && lookup_attribute ("no_reverse_bitfields",
+                                 TYPE_ATTRIBUTES (*type)))
+           || ((is_attribute_p ("no_reverse_bitfields", name)
+                && lookup_attribute ("reverse_bitfields",
+                                     TYPE_ATTRIBUTES (*type)))))
+    {
+      warning ("`%s' incompatible attribute ignored",
+               IDENTIFIER_POINTER (name));
+      *no_add_attrs = true;
+    }
+
+  return NULL_TREE;
+}
+
+/*
+  Add __attribute__ ((pragma_reverse_bitfields)) when in the scope of a
+  #pragma reverse_bitfields, or __attribute__
+  ((pragma_no_reverse_bitfields)) when in the scope of a #pragma
+  no_reverse_bitfields.  This gets called before
+  nios2_handle_struct_attribute above, so we can't just reuse the same
+  attributes.
+*/
+static void
+nios2_insert_attributes (tree node, tree *attr_ptr)
+{
+  tree type = NULL;
+  if (DECL_P (node))
+    {
+      if (TREE_CODE (node) == TYPE_DECL)
+        {
+          type = TREE_TYPE (node);
+        }
+    }
+  else
+    {
+      type = node;
+    }
+
+  if (!type
+      || (TREE_CODE (type) != RECORD_TYPE
+          && TREE_CODE (type) != UNION_TYPE))
+    {
+      /* We can ignore things other than structs & unions */
+      return;
+    }
+
+  if (lookup_attribute ("reverse_bitfields", TYPE_ATTRIBUTES (type))
+      || lookup_attribute ("no_reverse_bitfields", TYPE_ATTRIBUTES (type)))
+    {
+      /* If an attribute is already set, it silently overrides the
+         current #pragma, if any */
+      return;
+    }
+
+  if (nios2_pragma_reverse_bitfields_flag)
+    {
+      const char *id = (nios2_pragma_reverse_bitfields_flag == 1 ?
+                        "pragma_reverse_bitfields" :
+                        "pragma_no_reverse_bitfields");
+      /* No attribute set, and we are in the scope of a #pragma */
+      *attr_ptr = tree_cons (get_identifier (id), NULL, *attr_ptr);
+    }
+}
+
+
+/*
+ * The attributes take precedence over the pragmas, which in turn take
+ * precedence over the compile-time switches.
+ */
+static bool
+nios2_reverse_bitfield_layout_p (tree record_type)
+{
+  return ((TARGET_REVERSE_BITFIELDS
+           && !lookup_attribute ("pragma_no_reverse_bitfields",
+                                 TYPE_ATTRIBUTES (record_type))
+           && !lookup_attribute ("no_reverse_bitfields",
+                                 TYPE_ATTRIBUTES (record_type)))
+          || (lookup_attribute ("pragma_reverse_bitfields",
+                                TYPE_ATTRIBUTES (record_type))
+              && !lookup_attribute ("no_reverse_bitfields",
+                                    TYPE_ATTRIBUTES (record_type)))
+          || lookup_attribute ("reverse_bitfields",
+                               TYPE_ATTRIBUTES (record_type)));
+}
 
 
 /*****************************************
@@ -1331,14 +1499,14 @@ nios2_print_operand (FILE *file, rtx op, int letter)
     {
     case 'i':
       if (CONSTANT_P (op) && (op != const0_rtx))
-	fprintf (file, "i");
+    fprintf (file, "i");
       return;
 
     case 'o':
       if (GET_CODE (op) == MEM
           && ((MEM_VOLATILE_P (op) && !TARGET_CACHE_VOLATILE)
               || TARGET_BYPASS_CACHE))
-	fprintf (file, "io");
+    fprintf (file, "io");
       return;
 
     default:
@@ -1348,10 +1516,10 @@ nios2_print_operand (FILE *file, rtx op, int letter)
   if (comparison_operator (op, VOIDmode))
     {
       if (letter == 0)
-	{
-	  fprintf (file, "%s", GET_RTX_NAME (GET_CODE (op)));
-	  return;
-	}
+    {
+      fprintf (file, "%s", GET_RTX_NAME (GET_CODE (op)));
+      return;
+    }
     }
 
 
@@ -1359,26 +1527,26 @@ nios2_print_operand (FILE *file, rtx op, int letter)
     {
     case REG:
       if (letter == 0 || letter == 'z')
-	{
-	  fprintf (file, "%s", reg_names[REGNO (op)]);
-	  return;
-	}
+    {
+      fprintf (file, "%s", reg_names[REGNO (op)]);
+      return;
+    }
 
     case CONST_INT:
       if (INTVAL (op) == 0 && letter == 'z')
-	{
-	  fprintf (file, "zero");
-	  return;
-	}
+    {
+      fprintf (file, "zero");
+      return;
+    }
       else if (letter == 'U')
-	{
-	  HOST_WIDE_INT val = INTVAL (op);
-	  rtx new_op;
-	  val = (val / 65536) & 0xFFFF;
-	  new_op = GEN_INT (val);
-	  output_addr_const (file, new_op);
-	  return;
-	}
+    {
+      HOST_WIDE_INT val = INTVAL (op);
+      rtx new_op;
+      val = (val / 65536) & 0xFFFF;
+      new_op = GEN_INT (val);
+      output_addr_const (file, new_op);
+      return;
+    }
 
       /* else, fall through */
     case CONST:
@@ -1386,40 +1554,40 @@ nios2_print_operand (FILE *file, rtx op, int letter)
     case SYMBOL_REF:
     case CONST_DOUBLE:
       if (letter == 0 || letter == 'z')
-	{
-	  output_addr_const (file, op);
-	  return;
-	}
+    {
+      output_addr_const (file, op);
+      return;
+    }
       else if (letter == 'H')
-	{
-	  fprintf (file, "%%hiadj(");
-	  output_addr_const (file, op);
-	  fprintf (file, ")");
-	  return;
-	}
+    {
+      fprintf (file, "%%hiadj(");
+      output_addr_const (file, op);
+      fprintf (file, ")");
+      return;
+    }
       else if (letter == 'L')
-	{
-	  fprintf (file, "%%lo(");
-	  output_addr_const (file, op);
-	  fprintf (file, ")");
-	  return;
-	}
+    {
+      fprintf (file, "%%lo(");
+      output_addr_const (file, op);
+      fprintf (file, ")");
+      return;
+    }
 
 
     case SUBREG:
     case MEM:
       if (letter == 0)
-	{
-	  output_address (op);
-	  return;
-	}
+    {
+      output_address (op);
+      return;
+    }
 
     case CODE_LABEL:
       if (letter == 0)
-	{
-	  output_addr_const (file, op);
-	  return;
-	}
+    {
+      output_addr_const (file, op);
+      return;
+    }
 
     default:
       break;
@@ -1473,21 +1641,21 @@ nios2_print_operand_address (FILE *file, rtx op)
 
     case PLUS:
       {
-	rtx op0 = XEXP (op, 0);
-	rtx op1 = XEXP (op, 1);
+    rtx op0 = XEXP (op, 0);
+    rtx op1 = XEXP (op, 1);
 
-	if (REG_P (op0) && CONSTANT_P (op1))
-	  {
-	    output_addr_const (file, op1);
-	    fprintf (file, "(%s)", reg_names[REGNO (op0)]);
-	    return;
-	  }
-	else if (REG_P (op1) && CONSTANT_P (op0))
-	  {
-	    output_addr_const (file, op0);
-	    fprintf (file, "(%s)", reg_names[REGNO (op1)]);
-	    return;
-	  }
+    if (REG_P (op0) && CONSTANT_P (op1))
+      {
+        output_addr_const (file, op1);
+        fprintf (file, "(%s)", reg_names[REGNO (op0)]);
+        return;
+      }
+    else if (REG_P (op1) && CONSTANT_P (op0))
+      {
+        output_addr_const (file, op0);
+        fprintf (file, "(%s)", reg_names[REGNO (op1)]);
+        return;
+      }
       }
       break;
 
@@ -1497,9 +1665,9 @@ nios2_print_operand_address (FILE *file, rtx op)
 
     case MEM:
       {
-	rtx base = XEXP (op, 0);
-	PRINT_OPERAND_ADDRESS (file, base);
-	return;
+    rtx base = XEXP (op, 0);
+    PRINT_OPERAND_ADDRESS (file, base);
+    return;
       }
     default:
       break;
@@ -1669,8 +1837,8 @@ function_arg_advance (CUMULATIVE_ARGS *cum, enum machine_mode mode,
     {
       param_size = int_size_in_bytes (type);
       if (param_size < 0)
-	internal_error
-	  ("Do not know how to handle large structs or variable length types");
+    internal_error
+      ("Do not know how to handle large structs or variable length types");
     }
   else
     {
@@ -1729,8 +1897,8 @@ function_arg_partial_nregs (const CUMULATIVE_ARGS *cum,
     {
       param_size = int_size_in_bytes (type);
       if (param_size < 0)
-	internal_error
-	  ("Do not know how to handle large structs or variable length types");
+    internal_error
+      ("Do not know how to handle large structs or variable length types");
     }
   else
     {
@@ -1756,7 +1924,7 @@ int
 nios2_return_in_memory (tree type)
 {
   int res = ((int_size_in_bytes (type) > (2 * UNITS_PER_WORD))
-  	     || (int_size_in_bytes (type) == -1));
+         || (int_size_in_bytes (type) == -1));
 
   return res;
 }
@@ -1779,23 +1947,23 @@ nios2_setup_incoming_varargs (const CUMULATIVE_ARGS *cum,
   if (!no_rtl)
     {
       if (regs_to_push > 0)
-	{
-	  rtx ptr, mem;
+    {
+      rtx ptr, mem;
 
-	  ptr = virtual_incoming_args_rtx;
-	  mem = gen_rtx_MEM (BLKmode, ptr);
+      ptr = virtual_incoming_args_rtx;
+      mem = gen_rtx_MEM (BLKmode, ptr);
 
-	  /* va_arg is an array access in this case, which causes
-	     it to get MEM_IN_STRUCT_P set.  We must set it here
-	     so that the insn scheduler won't assume that these
-	     stores can't possibly overlap with the va_arg loads.  */
-	  MEM_SET_IN_STRUCT_P (mem, 1);
+      /* va_arg is an array access in this case, which causes
+         it to get MEM_IN_STRUCT_P set.  We must set it here
+         so that the insn scheduler won't assume that these
+         stores can't possibly overlap with the va_arg loads.  */
+      MEM_SET_IN_STRUCT_P (mem, 1);
 
-	  emit_insn (gen_blockage ());
-	  move_block_from_reg (local_cum.regs_used + FIRST_ARG_REGNO, mem,
-			       regs_to_push);
-	  emit_insn (gen_blockage ());
-	}
+      emit_insn (gen_blockage ());
+      move_block_from_reg (local_cum.regs_used + FIRST_ARG_REGNO, mem,
+                   regs_to_push);
+      emit_insn (gen_blockage ());
+    }
     }
 
   return regs_to_push * UNITS_PER_WORD;
@@ -2086,19 +2254,19 @@ nios2_init_builtins ()
    */
   int_ftype_volatile_const_void_p
     = build_function_type (integer_type_node,
-			   def_param (build_qualified_type (ptr_type_node,
-			                                    TYPE_QUAL_CONST | TYPE_QUAL_VOLATILE))
-			   endlink));
+               def_param (build_qualified_type (ptr_type_node,
+                                                TYPE_QUAL_CONST | TYPE_QUAL_VOLATILE))
+               endlink));
 
 
   /* void fn (volatile void *, int)
    */
   void_ftype_volatile_void_p_int
     = build_function_type (void_type_node,
-			   def_param (build_qualified_type (ptr_type_node,
-			                                    TYPE_QUAL_VOLATILE))
-			   def_param (integer_type_node)
-			   endlink)));
+               def_param (build_qualified_type (ptr_type_node,
+                                                TYPE_QUAL_VOLATILE))
+               def_param (integer_type_node)
+               endlink)));
 
   /* void fn (void)
    */
@@ -2126,300 +2294,300 @@ nios2_init_builtins ()
 
   custom_n
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     endlink));
+                 CUSTOM_NUM
+                 endlink));
   custom_ni
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     endlink)));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 endlink)));
   custom_nf
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     endlink)));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 endlink)));
   custom_np
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     endlink)));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 endlink)));
   custom_nii
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     def_param (integer_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 def_param (integer_type_node)
+                 endlink))));
   custom_nif
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     def_param (float_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 def_param (float_type_node)
+                 endlink))));
   custom_nip
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     def_param (ptr_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 def_param (ptr_type_node)
+                 endlink))));
   custom_nfi
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     def_param (integer_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 def_param (integer_type_node)
+                 endlink))));
   custom_nff
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     def_param (float_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 def_param (float_type_node)
+                 endlink))));
   custom_nfp
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     def_param (ptr_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 def_param (ptr_type_node)
+                 endlink))));
   custom_npi
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     def_param (integer_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 def_param (integer_type_node)
+                 endlink))));
   custom_npf
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     def_param (float_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 def_param (float_type_node)
+                 endlink))));
   custom_npp
       = build_function_type (void_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     def_param (ptr_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 def_param (ptr_type_node)
+                 endlink))));
 
   custom_in
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     endlink));
+                 CUSTOM_NUM
+                 endlink));
   custom_ini
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     endlink)));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 endlink)));
   custom_inf
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     endlink)));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 endlink)));
   custom_inp
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     endlink)));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 endlink)));
   custom_inii
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     def_param (integer_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 def_param (integer_type_node)
+                 endlink))));
   custom_inif
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     def_param (float_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 def_param (float_type_node)
+                 endlink))));
   custom_inip
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     def_param (ptr_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 def_param (ptr_type_node)
+                 endlink))));
   custom_infi
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     def_param (integer_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 def_param (integer_type_node)
+                 endlink))));
   custom_inff
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     def_param (float_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 def_param (float_type_node)
+                 endlink))));
   custom_infp
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     def_param (ptr_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 def_param (ptr_type_node)
+                 endlink))));
   custom_inpi
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     def_param (integer_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 def_param (integer_type_node)
+                 endlink))));
   custom_inpf
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     def_param (float_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 def_param (float_type_node)
+                 endlink))));
   custom_inpp
       = build_function_type (integer_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     def_param (ptr_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 def_param (ptr_type_node)
+                 endlink))));
 
   custom_fn
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     endlink));
+                 CUSTOM_NUM
+                 endlink));
   custom_fni
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     endlink)));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 endlink)));
   custom_fnf
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     endlink)));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 endlink)));
   custom_fnp
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     endlink)));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 endlink)));
   custom_fnii
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     def_param (integer_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 def_param (integer_type_node)
+                 endlink))));
   custom_fnif
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     def_param (float_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 def_param (float_type_node)
+                 endlink))));
   custom_fnip
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     def_param (ptr_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 def_param (ptr_type_node)
+                 endlink))));
   custom_fnfi
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     def_param (integer_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 def_param (integer_type_node)
+                 endlink))));
   custom_fnff
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     def_param (float_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 def_param (float_type_node)
+                 endlink))));
   custom_fnfp
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     def_param (ptr_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 def_param (ptr_type_node)
+                 endlink))));
   custom_fnpi
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     def_param (integer_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 def_param (integer_type_node)
+                 endlink))));
   custom_fnpf
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     def_param (float_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 def_param (float_type_node)
+                 endlink))));
   custom_fnpp
       = build_function_type (float_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     def_param (ptr_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 def_param (ptr_type_node)
+                 endlink))));
 
 
   custom_pn
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     endlink));
+                 CUSTOM_NUM
+                 endlink));
   custom_pni
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     endlink)));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 endlink)));
   custom_pnf
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     endlink)));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 endlink)));
   custom_pnp
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     endlink)));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 endlink)));
   custom_pnii
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     def_param (integer_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 def_param (integer_type_node)
+                 endlink))));
   custom_pnif
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     def_param (float_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 def_param (float_type_node)
+                 endlink))));
   custom_pnip
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     def_param (integer_type_node)
-  			     def_param (ptr_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (integer_type_node)
+                 def_param (ptr_type_node)
+                 endlink))));
   custom_pnfi
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     def_param (integer_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 def_param (integer_type_node)
+                 endlink))));
   custom_pnff
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     def_param (float_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 def_param (float_type_node)
+                 endlink))));
   custom_pnfp
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     def_param (float_type_node)
-  			     def_param (ptr_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (float_type_node)
+                 def_param (ptr_type_node)
+                 endlink))));
   custom_pnpi
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     def_param (integer_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 def_param (integer_type_node)
+                 endlink))));
   custom_pnpf
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     def_param (float_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 def_param (float_type_node)
+                 endlink))));
   custom_pnpp
       = build_function_type (ptr_type_node,
-  			     CUSTOM_NUM
-  			     def_param (ptr_type_node)
-  			     def_param (ptr_type_node)
-  			     endlink))));
+                 CUSTOM_NUM
+                 def_param (ptr_type_node)
+                 def_param (ptr_type_node)
+                 endlink))));
 
 
 
@@ -2429,7 +2597,7 @@ nios2_init_builtins ()
   for (d = bdesc; d->name; d++)
     {
       builtin_function (d->name, *d->type, d->code,
-			BUILT_IN_MD, NULL, NULL);
+            BUILT_IN_MD, NULL, NULL);
     }
 }
 

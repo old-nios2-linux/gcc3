@@ -295,6 +295,10 @@ struct gcc_target
      Microsoft Visual C++ bitfield layout rules.  */
   bool (* ms_bitfield_layout_p) (tree record_type);
 
+  /* Return true if bitfields in RECORD_TYPE should be allocated
+     within their base type's bytes starting at the opposite end.  */
+  bool (* reverse_bitfield_layout_p) (tree record_type);
+
   /* Set up target-specific built-in functions.  */
   void (* init_builtins) (void);
 

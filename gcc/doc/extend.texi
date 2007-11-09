@@ -2486,6 +2486,33 @@ contents of that register.   The @code{short_call} attribute always places
 the offset to the function from the call site into the @samp{BL}
 instruction directly.
 
+@item reverse_bitfields/no_reverse_bitfields
+@cindex reverse_bitfields on Altera Nios II
+This attribute specifies the order of bitfield allocation within a
+particular struct on Altera's Nios II processor.  This overrides both
+the @option{-mno-reverse-bitfields} and @option{-mreverse-bitfields}
+switches, as well as any @code{#pragma} that might be present.  It is
+ignored except when present on a struct.
+
+@smallexample
+struct inner
+@{
+  unsigned int a:1;
+  unsigned int b:31;
+@} __attribute__ ((reverse_bitfields));
+
+union outer
+@{
+  struct inner inner;
+  unsigned int val;
+@};
+
+@end smallexample
+
+will cause a to be allocated overlapping the most significant bit of
+val, regardless of any @code{#pragma} or compiler switch.  See the
+@option{-mreverse-bitfields} switch for more examples.
+
 @item function_vector
 @cindex calling functions through the function vector on the H8/300 processors
 Use this attribute on the H8/300, H8/300H, and H8S to indicate that the specified
@@ -7325,12 +7352,36 @@ we do not recommend the use of pragmas; @xref{Function Attributes},
 for further explanation.
 
 @menu
+* Altera Nios II Pragmas::
 * ARM Pragmas::
 * RS/6000 and PowerPC Pragmas::
 * Darwin Pragmas::
 * Solaris Pragmas::
 * Tru64 Pragmas::
 @end menu
+
+@node Altera Nios II Pragmas
+@subsection Altera Nios II Pragmas
+
+The Altera Nios II target defines two pragmas to control the placement
+of bitfields within a struct.
+
+@table @code
+@item reverse_bitfields
+@cindex pragma, reverse_bitfields
+Cause all subsequent structs to behave as though the -mreverse-bitfields
+compiler switch had been given.  Can be overridden by the
+@code{no_reverse_bitfields} attribute or a subsequent
+@code{#pragma no_reverse_bitfields}.
+
+@item no_reverse_bitfields
+@cindex pragma, no_reverse_bitfields
+Cause all subsequent structs to behave as though the -mno-reverse-bitfields
+compiler switch had been given.  Can be overridden by the
+@code{reverse_bitfields} attribute or a subsequent
+@code{#pragma reverse_bitfields}.
+
+@end table
 
 @node ARM Pragmas
 @subsection ARM Pragmas

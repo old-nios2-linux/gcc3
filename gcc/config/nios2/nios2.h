@@ -21,12 +21,12 @@ Boston, MA 02111-1307, USA.  */
 
 
 
-#define TARGET_CPU_CPP_BUILTINS()		\
-  do						\
-    {						\
-      builtin_define_std ("NIOS2");		\
-      builtin_define_std ("nios2");		\
-    }						\
+#define TARGET_CPU_CPP_BUILTINS()       \
+  do                        \
+    {                       \
+      builtin_define_std ("NIOS2");     \
+      builtin_define_std ("nios2");     \
+    }                       \
   while (0)
 #define TARGET_VERSION fprintf (stderr, " (Altera Nios II)")
 
@@ -45,7 +45,8 @@ Boston, MA 02111-1307, USA.  */
 #define INLINE_MEMCPY_FLAG 0x00010
 #define CACHE_VOLATILE_FLAG 0x0020
 #define BYPASS_CACHE_FLAG 0x0040
-#define STACK_CHECK_FLAG 0x0080 
+#define STACK_CHECK_FLAG 0x0080
+#define REVERSE_BITFIELDS_FLAG 0x0100
 
 extern int target_flags;
 #define TARGET_HAS_DIV (target_flags & HAS_DIV_FLAG)
@@ -56,60 +57,65 @@ extern int target_flags;
 #define TARGET_CACHE_VOLATILE (target_flags & CACHE_VOLATILE_FLAG)
 #define TARGET_BYPASS_CACHE (target_flags & BYPASS_CACHE_FLAG)
 #define TARGET_STACK_CHECK (target_flags & STACK_CHECK_FLAG)
+#define TARGET_REVERSE_BITFIELDS (target_flags & REVERSE_BITFIELDS_FLAG)
 
-#define TARGET_SWITCHES					\
-{							\
-    { "hw-div", HAS_DIV_FLAG,				\
-      N_("Enable DIV, DIVU") },				\
-    { "no-hw-div", -HAS_DIV_FLAG,			\
-      N_("Disable DIV, DIVU (default)") },		\
-    { "hw-mul", HAS_MUL_FLAG,				\
-      N_("Enable MUL instructions (default)") },				\
-    { "hw-mulx", HAS_MULX_FLAG,				\
-      N_("Enable MULX instructions, assume fast shifter") },				\
-    { "no-hw-mul", -HAS_MUL_FLAG,			\
-      N_("Disable MUL instructions") },		\
-    { "no-hw-mulx", -HAS_MULX_FLAG,			\
-      N_("Disable MULX instructions, assume slow shifter (default and implied by -mno-hw-mul)") },		\
-    { "fast-sw-div", FAST_SW_DIV_FLAG,				\
-      N_("Use table based fast divide (default at -O3)") },				\
-    { "no-fast-sw-div", -FAST_SW_DIV_FLAG,			\
-      N_("Don't use table based fast divide ever") },		\
-    { "inline-memcpy", INLINE_MEMCPY_FLAG,				\
-      N_("Inline small memcpy (default when optimizing)") },				\
-    { "no-inline-memcpy", -INLINE_MEMCPY_FLAG,			\
-      N_("Don't Inline small memcpy") },		\
-    { "cache-volatile", CACHE_VOLATILE_FLAG,				\
-      N_("Volatile accesses use non-io variants of instructions (default)") },				\
-    { "no-cache-volatile", -CACHE_VOLATILE_FLAG,			\
-      N_("Volatile accesses use io variants of instructions") },		\
-    { "bypass-cache", BYPASS_CACHE_FLAG,				\
-      N_("All ld/st instructins use io variants") },				\
-    { "no-bypass-cache", -BYPASS_CACHE_FLAG,			\
-      N_("All ld/st instructins do not use io variants (default)") },		\
-    { "smallc", 0,			\
-      N_("Link with a limited version of the C library") },		\
-    { "ctors-in-init", 0,			\
-      "" /* undocumented: N_("Link with static constructors and destructors in init") */ },		\
-    { "stack-check", STACK_CHECK_FLAG,				\
-      N_("Enable stack limit checking.") },				\
-    { "no-stack-check", -STACK_CHECK_FLAG,				\
-      N_("Disable stack limit checking (default).") },				\
-    { "", TARGET_DEFAULT, 0 }				\
+#define TARGET_SWITCHES                 \
+{                           \
+    { "hw-div", HAS_DIV_FLAG,               \
+      N_("Enable DIV, DIVU") },             \
+    { "no-hw-div", -HAS_DIV_FLAG,           \
+      N_("Disable DIV, DIVU (default)") },      \
+    { "hw-mul", HAS_MUL_FLAG,               \
+      N_("Enable MUL instructions (default)") },                \
+    { "hw-mulx", HAS_MULX_FLAG,             \
+      N_("Enable MULX instructions, assume fast shifter") },                \
+    { "no-hw-mul", -HAS_MUL_FLAG,           \
+      N_("Disable MUL instructions") },     \
+    { "no-hw-mulx", -HAS_MULX_FLAG,         \
+      N_("Disable MULX instructions, assume slow shifter (default and implied by -mno-hw-mul)") },      \
+    { "fast-sw-div", FAST_SW_DIV_FLAG,              \
+      N_("Use table based fast divide (default at -O3)") },             \
+    { "no-fast-sw-div", -FAST_SW_DIV_FLAG,          \
+      N_("Don't use table based fast divide ever") },       \
+    { "inline-memcpy", INLINE_MEMCPY_FLAG,              \
+      N_("Inline small memcpy (default when optimizing)") },                \
+    { "no-inline-memcpy", -INLINE_MEMCPY_FLAG,          \
+      N_("Don't Inline small memcpy") },        \
+    { "cache-volatile", CACHE_VOLATILE_FLAG,                \
+      N_("Volatile accesses use non-io variants of instructions (default)") },              \
+    { "no-cache-volatile", -CACHE_VOLATILE_FLAG,            \
+      N_("Volatile accesses use io variants of instructions") },        \
+    { "bypass-cache", BYPASS_CACHE_FLAG,                \
+      N_("All ld/st instructins use io variants") },                \
+    { "no-bypass-cache", -BYPASS_CACHE_FLAG,            \
+      N_("All ld/st instructins do not use io variants (default)") },       \
+    { "smallc", 0,          \
+      N_("Link with a limited version of the C library") },     \
+    { "ctors-in-init", 0,           \
+      "" /* undocumented: N_("Link with static constructors and destructors in init") */ },     \
+    { "stack-check", STACK_CHECK_FLAG,              \
+      N_("Enable stack limit checking.") },             \
+    { "no-stack-check", -STACK_CHECK_FLAG,              \
+      N_("Disable stack limit checking (default).") },              \
+    { "reverse-bitfields", REVERSE_BITFIELDS_FLAG,          \
+      N_("Reverse the order of bitfields in a struct.") },      \
+    { "no-reverse-bitfields", -REVERSE_BITFIELDS_FLAG,          \
+      N_("Use the normal order of bitfields in a struct (default).") }, \
+    { "", TARGET_DEFAULT, 0 }               \
 }
 
 extern const char *nios2_sys_nosys_string;    /* for -msys=nosys */
 extern const char *nios2_sys_lib_string;    /* for -msys-lib= */
 extern const char *nios2_sys_crt0_string;    /* for -msys-crt0= */
 
-#define TARGET_OPTIONS					\
-{							\
-  { "sys=nosys",    &nios2_sys_nosys_string,		\
-      N_("Use stub versions of OS library calls (default)"), 0},	\
-  { "sys-lib=",    &nios2_sys_lib_string,		\
-      N_("Name of System Library to link against. (Converted to a -l option)"), 0},	\
-  { "sys-crt0=",    &nios2_sys_crt0_string,		\
-      N_("Name of the startfile. (default is a crt0 for the ISS only)"), 0},	\
+#define TARGET_OPTIONS                  \
+{                           \
+  { "sys=nosys",    &nios2_sys_nosys_string,        \
+      N_("Use stub versions of OS library calls (default)"), 0},    \
+  { "sys-lib=",    &nios2_sys_lib_string,       \
+      N_("Name of System Library to link against. (Converted to a -l option)"), 0}, \
+  { "sys-crt0=",    &nios2_sys_crt0_string,     \
+      N_("Name of the startfile. (default is a crt0 for the ISS only)"), 0},    \
 }
 
 
@@ -120,7 +126,7 @@ extern const char *nios2_sys_crt0_string;    /* for -msys-crt0= */
 
 /* Switch  Recognition by gcc.c.  Add -G xx support */
 #undef  SWITCH_TAKES_ARG
-#define SWITCH_TAKES_ARG(CHAR)						\
+#define SWITCH_TAKES_ARG(CHAR)                      \
   (DEFAULT_SWITCH_TAKES_ARG (CHAR) || (CHAR) == 'G')
 
 #define OVERRIDE_OPTIONS override_options ()
@@ -172,8 +178,8 @@ extern const char *nios2_sys_crt0_string;    /* for -msys-crt0= */
 #define PREFERRED_STACK_BOUNDARY 32
 #define MAX_FIXED_MODE_SIZE 64
 
-#define CONSTANT_ALIGNMENT(EXP, ALIGN)				\
-  ((TREE_CODE (EXP) == STRING_CST) 				\
+#define CONSTANT_ALIGNMENT(EXP, ALIGN)              \
+  ((TREE_CODE (EXP) == STRING_CST)              \
    && (ALIGN) < BITS_PER_WORD ? BITS_PER_WORD : (ALIGN))
 
 
@@ -197,15 +203,15 @@ extern const char *nios2_sys_crt0_string;    /* for -msys-crt0= */
 /* comparison type */
 /* ??? currently only CMP_SI is used */
 enum cmp_type {
-  CMP_SI,				/* compare four byte integers */
-  CMP_DI,				/* compare eight byte integers */
-  CMP_SF,				/* compare single precision floats */
-  CMP_DF,				/* compare double precision floats */
-  CMP_MAX				/* max comparison type */
+  CMP_SI,               /* compare four byte integers */
+  CMP_DI,               /* compare eight byte integers */
+  CMP_SF,               /* compare single precision floats */
+  CMP_DF,               /* compare double precision floats */
+  CMP_MAX               /* max comparison type */
 };
 
-extern GTY(()) rtx branch_cmp[2];	/* operands for compare */
-extern enum cmp_type branch_type;	/* what type of branch to use */
+extern GTY(()) rtx branch_cmp[2];   /* operands for compare */
+extern enum cmp_type branch_type;   /* what type of branch to use */
 
 /**********************
  * Register Usage
@@ -239,12 +245,12 @@ Register Number
 31    r31 ra    Return Address
 
 32    ctl0 status
-33    ctl1 estatus STATUS saved by exception ? 	
-34    ctl2 bstatus STATUS saved by break ? 	
-35    ctl3 ipri    Interrupt Priority Mask ?	
-36    ctl4 ecause  Exception Cause ? 	
+33    ctl1 estatus STATUS saved by exception ?  
+34    ctl2 bstatus STATUS saved by break ?  
+35    ctl3 ipri    Interrupt Priority Mask ?    
+36    ctl4 ecause  Exception Cause ?    
 
-37         pc   Not an actual register	
+37         pc   Not an actual register  
 
 38    rap      Return address pointer, this does not
                    actually exist and will be eliminated
@@ -265,8 +271,8 @@ are located in nios2.md.
 
 
 /* also see CONDITIONAL_REGISTER_USAGE */
-#define FIXED_REGISTERS			     \
-    {					     \
+#define FIXED_REGISTERS              \
+    {                        \
 /*        +0  1  2  3  4  5  6  7  8  9 */   \
 /*   0 */  1, 1, 0, 0, 0, 0, 0, 0, 0, 0,     \
 /*  10 */  0, 0, 0, 0, 0, 0, 0, 0, 0, 0,     \
@@ -277,8 +283,8 @@ are located in nios2.md.
 
 /* call used is the same as caller saved
    + fixed regs + args + ret vals */
-#define CALL_USED_REGISTERS		     \
-    { 					     \
+#define CALL_USED_REGISTERS          \
+    {                        \
 /*        +0  1  2  3  4  5  6  7  8  9 */   \
 /*   0 */  1, 1, 1, 1, 1, 1, 1, 1, 1, 1,     \
 /*  10 */  1, 1, 1, 1, 1, 1, 0, 0, 0, 0,     \
@@ -468,15 +474,15 @@ enum reg_class
 #define RDWRCTL_INT(X) ((X) >= 0 && (X) <= 31)
 #define CUSTOM_INSN_OPCODE(X) ((X) >= 0 && (X) <= 255)
 
-#define CONST_OK_FOR_LETTER_P(VALUE, C)			\
- (							\
-  (C) == 'I' ? SMALL_INT (VALUE) :			\
-  (C) == 'J' ? SMALL_INT_UNSIGNED (VALUE) :		\
-  (C) == 'K' ? UPPER16_INT (VALUE) :         		\
-  (C) == 'L' ? SHIFT_INT (VALUE) :			\
-  (C) == 'M' ? (VALUE) == 0 :				\
-  (C) == 'N' ? CUSTOM_INSN_OPCODE (VALUE) :		\
-  (C) == 'O' ? RDWRCTL_INT (VALUE) :			\
+#define CONST_OK_FOR_LETTER_P(VALUE, C)         \
+ (                          \
+  (C) == 'I' ? SMALL_INT (VALUE) :          \
+  (C) == 'J' ? SMALL_INT_UNSIGNED (VALUE) :     \
+  (C) == 'K' ? UPPER16_INT (VALUE) :                \
+  (C) == 'L' ? SHIFT_INT (VALUE) :          \
+  (C) == 'M' ? (VALUE) == 0 :               \
+  (C) == 'N' ? CUSTOM_INSN_OPCODE (VALUE) :     \
+  (C) == 'O' ? RDWRCTL_INT (VALUE) :            \
   0)
 
 #define CONST_DOUBLE_OK_FOR_LETTER_P(VALUE, C) 0
@@ -490,9 +496,9 @@ enum reg_class
 /* 'S' matches immediates which are in small data 
    and therefore can be added to gp to create a 
    32-bit value. */
-#define EXTRA_CONSTRAINT(VALUE, C)		\
-  ((C) == 'S' 					\
-   && (GET_CODE (VALUE) == SYMBOL_REF)   	\
+#define EXTRA_CONSTRAINT(VALUE, C)      \
+  ((C) == 'S'                   \
+   && (GET_CODE (VALUE) == SYMBOL_REF)      \
    && SYMBOL_REF_IN_NIOS2_SMALL_DATA_P (VALUE))
 
 
@@ -562,27 +568,27 @@ enum reg_class
 
 #define FRAME_POINTER_REQUIRED 0
 
-#define ELIMINABLE_REGS							\
-{{ ARG_POINTER_REGNUM,   STACK_POINTER_REGNUM},				\
- { ARG_POINTER_REGNUM,   HARD_FRAME_POINTER_REGNUM},			\
- { RETURN_ADDRESS_POINTER_REGNUM, STACK_POINTER_REGNUM},		\
- { RETURN_ADDRESS_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM},		\
- { FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM},				\
+#define ELIMINABLE_REGS                         \
+{{ ARG_POINTER_REGNUM,   STACK_POINTER_REGNUM},             \
+ { ARG_POINTER_REGNUM,   HARD_FRAME_POINTER_REGNUM},            \
+ { RETURN_ADDRESS_POINTER_REGNUM, STACK_POINTER_REGNUM},        \
+ { RETURN_ADDRESS_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM},       \
+ { FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM},             \
  { FRAME_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM}}
 
-#define CAN_ELIMINATE(FROM, TO)	1
+#define CAN_ELIMINATE(FROM, TO) 1
 
 #define INITIAL_ELIMINATION_OFFSET(FROM, TO, OFFSET) \
-	(OFFSET) = nios2_initial_elimination_offset ((FROM), (TO))
+    (OFFSET) = nios2_initial_elimination_offset ((FROM), (TO))
 
 #define MUST_SAVE_REGISTER(regno) \
- ((regs_ever_live[regno] && !call_used_regs[regno])			\
-  || (regno == HARD_FRAME_POINTER_REGNUM && frame_pointer_needed)	\
+ ((regs_ever_live[regno] && !call_used_regs[regno])         \
+  || (regno == HARD_FRAME_POINTER_REGNUM && frame_pointer_needed)   \
   || (regno == RA_REGNO && regs_ever_live[RA_REGNO]))
 
 /* Treat LOC as a byte offset from the stack pointer and round it up
    to the next fully-aligned offset.  */
-#define STACK_ALIGN(LOC)						\
+#define STACK_ALIGN(LOC)                        \
   (((LOC) + ((PREFERRED_STACK_BOUNDARY / 8) - 1)) & ~((PREFERRED_STACK_BOUNDARY / 8) - 1))
 
 
@@ -617,11 +623,11 @@ typedef struct nios2_args
     ((REGNO) >= FIRST_ARG_REGNO && (REGNO) <= LAST_ARG_REGNO)
 
 #define SETUP_INCOMING_VARARGS(CUM,MODE,TYPE,PRETEND_SIZE,NO_RTL)   \
-  {								    \
-    int pret_size = nios2_setup_incoming_varargs (&(CUM), (MODE),	    \
-						(TYPE), (NO_RTL));  \
-    if (pret_size)						    \
-      (PRETEND_SIZE) = pret_size;				    \
+  {                                 \
+    int pret_size = nios2_setup_incoming_varargs (&(CUM), (MODE),       \
+                        (TYPE), (NO_RTL));  \
+    if (pret_size)                          \
+      (PRETEND_SIZE) = pret_size;                   \
   }
 
 /* ----------------------------- *
@@ -662,7 +668,7 @@ typedef struct nios2_args
  * ----------------------------- */
 
 
-#define RETURN_IN_MEMORY(TYPE)	\
+#define RETURN_IN_MEMORY(TYPE)  \
   nios2_return_in_memory (TYPE)
 
 
@@ -710,7 +716,7 @@ typedef struct nios2_args
 #define GO_IF_MODE_DEPENDENT_ADDRESS(ADDR, LABEL)
 
 /* Set if this has a weak declaration  */
-#define SYMBOL_FLAG_WEAK_DECL	(1 << SYMBOL_FLAG_MACH_DEP_SHIFT)
+#define SYMBOL_FLAG_WEAK_DECL   (1 << SYMBOL_FLAG_MACH_DEP_SHIFT)
 #define SYMBOL_REF_WEAK_DECL_P(RTX) \
   ((SYMBOL_REF_FLAGS (RTX) & SYMBOL_FLAG_WEAK_DECL) != 0)
 
@@ -822,18 +828,18 @@ typedef struct nios2_args
     "fake_ap", \
 }
 
-#define ADDITIONAL_REGISTER_NAMES	\
-{					\
-  {"r0", 0},				\
-  {"r1", 1},				\
-  {"r24", 24},				\
-  {"r25", 25},				\
-  {"r26", 26},				\
-  {"r27", 27},				\
-  {"r28", 28},				\
-  {"r29", 29},				\
-  {"r30", 30},				\
-  {"r31", 31}				\
+#define ADDITIONAL_REGISTER_NAMES   \
+{                   \
+  {"r0", 0},                \
+  {"r1", 1},                \
+  {"r24", 24},              \
+  {"r25", 25},              \
+  {"r26", 26},              \
+  {"r27", 27},              \
+  {"r28", 28},              \
+  {"r29", 29},              \
+  {"r30", 30},              \
+  {"r31", 31}               \
 }
 
 
@@ -881,30 +887,30 @@ extern unsigned long nios2_section_threshold;
    to depend on their types.  We do exactly that here.  */
 
 #undef COMMON_ASM_OP
-#define COMMON_ASM_OP	"\t.comm\t"
+#define COMMON_ASM_OP   "\t.comm\t"
 
 #undef  ASM_OUTPUT_ALIGNED_COMMON
-#define ASM_OUTPUT_ALIGNED_COMMON(FILE, NAME, SIZE, ALIGN)		\
-do 									\
-{									\
-  if ((SIZE) <= nios2_section_threshold)				\
-    {									\
-      named_section (0, ".sbss", 0);					\
-      (*targetm.asm_out.globalize_label) (FILE, NAME);			\
-      ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "object");			\
-      if (!flag_inhibit_size_directive)					\
-	ASM_OUTPUT_SIZE_DIRECTIVE (FILE, NAME, SIZE);			\
-      ASM_OUTPUT_ALIGN ((FILE), exact_log2((ALIGN) / BITS_PER_UNIT));	\
-      ASM_OUTPUT_LABEL(FILE, NAME);					\
-      ASM_OUTPUT_SKIP((FILE), (SIZE) ? (SIZE) : 1);			\
-    }									\
-  else									\
-    {									\
-      fprintf ((FILE), "%s", COMMON_ASM_OP);				\
-      assemble_name ((FILE), (NAME));					\
-      fprintf ((FILE), ","HOST_WIDE_INT_PRINT_UNSIGNED",%u\n", (SIZE), (ALIGN) / BITS_PER_UNIT);	\
-    }									\
-}									\
+#define ASM_OUTPUT_ALIGNED_COMMON(FILE, NAME, SIZE, ALIGN)      \
+do                                  \
+{                                   \
+  if ((SIZE) <= nios2_section_threshold)                \
+    {                                   \
+      named_section (0, ".sbss", 0);                    \
+      (*targetm.asm_out.globalize_label) (FILE, NAME);          \
+      ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "object");         \
+      if (!flag_inhibit_size_directive)                 \
+    ASM_OUTPUT_SIZE_DIRECTIVE (FILE, NAME, SIZE);           \
+      ASM_OUTPUT_ALIGN ((FILE), exact_log2((ALIGN) / BITS_PER_UNIT));   \
+      ASM_OUTPUT_LABEL(FILE, NAME);                 \
+      ASM_OUTPUT_SKIP((FILE), (SIZE) ? (SIZE) : 1);         \
+    }                                   \
+  else                                  \
+    {                                   \
+      fprintf ((FILE), "%s", COMMON_ASM_OP);                \
+      assemble_name ((FILE), (NAME));                   \
+      fprintf ((FILE), ","HOST_WIDE_INT_PRINT_UNSIGNED",%u\n", (SIZE), (ALIGN) / BITS_PER_UNIT);    \
+    }                                   \
+}                                   \
 while (0)
 
 
@@ -914,18 +920,18 @@ while (0)
    to depend on their types.  We do exactly that here.  */
 
 #undef  ASM_OUTPUT_ALIGNED_LOCAL
-#define ASM_OUTPUT_ALIGNED_LOCAL(FILE, NAME, SIZE, ALIGN)		\
-do {									\
-  if ((SIZE) <= nios2_section_threshold)				\
-    named_section (0, ".sbss", 0);					\
-  else									\
-    named_section (0, ".bss", 0);					\
-  ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "object");			\
-  if (!flag_inhibit_size_directive)					\
-    ASM_OUTPUT_SIZE_DIRECTIVE (FILE, NAME, SIZE);			\
-  ASM_OUTPUT_ALIGN ((FILE), exact_log2((ALIGN) / BITS_PER_UNIT));	\
-  ASM_OUTPUT_LABEL(FILE, NAME);						\
-  ASM_OUTPUT_SKIP((FILE), (SIZE) ? (SIZE) : 1);				\
+#define ASM_OUTPUT_ALIGNED_LOCAL(FILE, NAME, SIZE, ALIGN)       \
+do {                                    \
+  if ((SIZE) <= nios2_section_threshold)                \
+    named_section (0, ".sbss", 0);                  \
+  else                                  \
+    named_section (0, ".bss", 0);                   \
+  ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "object");         \
+  if (!flag_inhibit_size_directive)                 \
+    ASM_OUTPUT_SIZE_DIRECTIVE (FILE, NAME, SIZE);           \
+  ASM_OUTPUT_ALIGN ((FILE), exact_log2((ALIGN) / BITS_PER_UNIT));   \
+  ASM_OUTPUT_LABEL(FILE, NAME);                     \
+  ASM_OUTPUT_SKIP((FILE), (SIZE) ? (SIZE) : 1);             \
 } while (0)
 
 
@@ -938,6 +944,8 @@ do {									\
 
 #define Pmode SImode
 #define FUNCTION_MODE QImode
+
+#define REGISTER_TARGET_PRAGMAS() nios2_register_target_pragmas ();
 
 #define CASE_VECTOR_MODE Pmode
 
