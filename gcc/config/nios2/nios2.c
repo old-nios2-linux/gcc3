@@ -165,7 +165,7 @@ GTY (())
  * Register Classes
  ***************************************/
 
-enum reg_class 
+enum reg_class
 reg_class_from_constraint (char chr, const char *str)
 {
   if (chr == 'D' && ISDIGIT (str[1]) && ISDIGIT (str[2]))
@@ -173,14 +173,14 @@ reg_class_from_constraint (char chr, const char *str)
       int regno;
       int ones = str[2] - '0';
       int tens = str[1] - '0';
-      
+
       regno = ones + (10 * tens);
       if (regno < 0 || regno > 31)
         return NO_REGS;
-        
+
       return D00_REG + regno;
     }
-   
+
   return NO_REGS;
 }
 
@@ -259,11 +259,11 @@ restore_reg (int regno, HOST_WIDE_INT offset)
 case all the immediates will fit into the 16-bit immediate
 fields.
 - the second is when the frame size is too big, in that
-case an additional temporary register is used, first 
+case an additional temporary register is used, first
 as a cfa_temp to offset the sp, second as the cfa_store
 register.
 
-See the comment above dwarf2out_frame_debug_expr in 
+See the comment above dwarf2out_frame_debug_expr in
 dwarf2out.c for more explanation of the "rules."
 
 
@@ -271,11 +271,11 @@ Case 1:
 Rule #  Example Insn                       Effect
 2       addi    sp, sp, -total_frame_size  cfa.reg=sp, cfa.offset=total_frame_size
                                            cfa_store.reg=sp, cfa_store.offset=total_frame_size
-12      stw     ra, offset(sp)             
+12      stw     ra, offset(sp)
 12      stw     r16, offset(sp)
 1       mov     fp, sp
-  
-Case 2: 
+
+Case 2:
 Rule #  Example Insn                       Effect
 6       movi    r8, total_frame_size       cfa_temp.reg=r8, cfa_temp.offset=total_frame_size
 2       sub     sp, sp, r8                 cfa.reg=sp, cfa.offset=total_frame_size
@@ -301,7 +301,7 @@ expand_prologue ()
   if (total_frame_size)
     {
 
-      if (TOO_BIG_OFFSET (total_frame_size)) 
+      if (TOO_BIG_OFFSET (total_frame_size))
         {
             /* cfa_temp and cfa_store_reg are the same register,
                cfa_store_reg overwrites cfa_temp */
@@ -325,7 +325,7 @@ expand_prologue ()
 
             /* if there are no registers to save, I don't need to
                create a cfa_store */
-            if (cfun->machine->frame.save_reg_size) 
+            if (cfun->machine->frame.save_reg_size)
               {
                 insn = gen_rtx_SET (SImode,
                                     cfa_store_reg,
@@ -337,8 +337,8 @@ expand_prologue ()
                 RTX_FRAME_RELATED_P (insn) = 1;
               }
 
-            cfa_store_offset 
-              = total_frame_size 
+            cfa_store_offset
+              = total_frame_size
                 - (cfun->machine->frame.save_regs_offset
                    + cfun->machine->frame.save_reg_rounded);
         }
@@ -353,7 +353,7 @@ expand_prologue ()
             RTX_FRAME_RELATED_P (insn) = 1;
 
             cfa_store_reg = stack_pointer_rtx;
-            cfa_store_offset 
+            cfa_store_offset
               = cfun->machine->frame.save_regs_offset
                 + cfun->machine->frame.save_reg_rounded;
         }
@@ -546,7 +546,7 @@ compute_frame_size ()
   HOST_WIDE_INT var_size;       /* # of var. bytes allocated */
   HOST_WIDE_INT total_size;     /* # bytes that the entire frame takes up */
   HOST_WIDE_INT save_reg_size;  /* # bytes needed to store callee save regs */
-  HOST_WIDE_INT save_reg_rounded;       
+  HOST_WIDE_INT save_reg_rounded;
     /* # bytes needed to store callee save regs (rounded) */
   HOST_WIDE_INT out_args_size;  /* # bytes needed for outgoing args */
 
@@ -1094,6 +1094,21 @@ NIOS2_FOR_ALL_FPU_INSNS
       fdivs = 255;
       flag_single_precision_constant = 1;
     }
+  else if (!strcasecmp (cfg, "72-3"))
+    {
+      floatus = 243;
+      fixsi   = 244;
+      floatis = 245;
+      fcmpgts = 246;
+      fcmples = 249;
+      fcmpeqs = 250;
+      fcmpnes = 251;
+      fmuls   = 252;
+      fadds   = 253;
+      fsubs   = 254;
+      fdivs   = 255;
+      flag_single_precision_constant = 1;
+    }
   else
     {
       warning ("ignoring unrecognized %sfpu-cfg' value `%s'",
@@ -1117,7 +1132,7 @@ override_options ()
   /* Function to allocate machine-dependent function status.  */
   init_machine_status = &nios2_init_machine_status;
 
-  nios2_section_threshold 
+  nios2_section_threshold
     = g_switch_set ? g_switch_value : NIOS2_DEFAULT_GVALUE;
 
   if (nios2_sys_nosys_string && *nios2_sys_nosys_string)
@@ -1126,11 +1141,11 @@ override_options ()
     }
 
   /* If we don't have mul, we don't have mulx either! */
-  if (!TARGET_HAS_MUL && TARGET_HAS_MULX) 
+  if (!TARGET_HAS_MUL && TARGET_HAS_MULX)
     {
       target_flags &= ~HAS_MULX_FLAG;
     }
-  
+
   /* Set up for stack limit checking */
   if (TARGET_STACK_CHECK)
     {
@@ -1503,10 +1518,82 @@ map_test_to_internal_test (enum rtx_code test_code)
   return test;
 }
 
+bool have_nios2_fpu_cmp_insn( enum rtx_code cond_t, enum cmp_type cmp_t );
+enum rtx_code get_reverse_cond(enum rtx_code cond_t);
+
+bool
+have_nios2_fpu_cmp_insn( enum rtx_code cond_t, enum cmp_type cmp_t )
+{
+  if (cmp_t == CMP_SF)
+    {
+      switch (cond_t) {
+      case EQ: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_seqsf].N >= 0);
+      case NE: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_snesf].N >= 0);
+      case GT: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N >= 0);
+      case GE: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sgesf].N >= 0);
+      case LT: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sltsf].N >= 0);
+      case LE: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_slesf].N >= 0);
+      default: 
+        break;
+      }
+    }
+  else if (cmp_t == CMP_DF)
+    {
+      switch (cond_t) {
+      case EQ: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_seqdf].N >= 0);
+      case NE: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_snedf].N >= 0);
+      case GT: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N >= 0);
+      case GE: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sgedf].N >= 0);
+      case LT: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sltdf].N >= 0);
+      case LE: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sledf].N >= 0);
+      default: 
+        break;
+      }
+    }
+
+  return false;
+}
+
+/* Note that get_reverse_cond() is not the same as get_inverse_cond()
+    get_reverse_cond() means that if the operand order is reversed,
+    what is the operand that is needed to generate the same condition?
+*/
+enum rtx_code
+get_reverse_cond(enum rtx_code cond_t)
+{
+	switch (cond_t)
+	{
+     	case GT: return LT;
+        case GE: return LE;
+        case LT: return GT;
+        case LE: return GE;
+        case GTU: return LTU;
+        case GEU: return LEU;
+        case LTU: return GTU;
+        case LEU: return GEU;
+        default: break;
+    }
+
+	return cond_t;
+}
+
+
 /* Generate the code to compare (and possibly branch) two integer values
-   TEST_CODE is the comparison code we are trying to emulate 
+   TEST_CODE is the comparison code we are trying to emulate
      (or implement directly)
-   RESULT is where to store the result of the comparison, 
+   RESULT is where to store the result of the comparison,
      or null to emit a branch
    CMP0 CMP1 are the two comparison operands
    DESTINATION is the destination of the branch, or null to only compare
@@ -1526,7 +1613,7 @@ gen_int_relational (enum rtx_code test_code, /* relational test (EQ, etc) */
     int reverse_regs;           /* reverse registers in test */
 
     /* for immediate compares */
-    enum rtx_code test_code_const;      
+    enum rtx_code test_code_const;
          /* code to use in instruction (LT vs. LTU) */
     int const_low;              /* low bound of constant we can accept */
     int const_high;             /* high bound of constant we can accept */
@@ -1558,8 +1645,6 @@ gen_int_relational (enum rtx_code test_code, /* relational test (EQ, etc) */
   int branch_p;
 
 
-
-
   test = map_test_to_internal_test (test_code);
   if (test == ITEST_MAX)
     abort ();
@@ -1575,15 +1660,40 @@ gen_int_relational (enum rtx_code test_code, /* relational test (EQ, etc) */
   /* Handle floating point comparison directly. */
   if (branch_type == CMP_SF || branch_type == CMP_DF)
     {
+
+      bool reverse_operands = false;
+
       enum machine_mode float_mode = (branch_type == CMP_SF) ? SFmode : DFmode;
+
       if (!register_operand (cmp0, float_mode)
           || !register_operand (cmp1, float_mode))
         {
           abort ();
         }
+
+      if (branch_p)
+      {
+        test_code = p_info->test_code_reg;
+        reverse_operands = (p_info->reverse_regs);
+      }
+
+      if ( !have_nios2_fpu_cmp_insn(test_code, branch_type) &&
+           have_nios2_fpu_cmp_insn(get_reverse_cond(test_code), branch_type) )
+        {
+          test_code = get_reverse_cond(test_code);
+          reverse_operands = !reverse_operands;
+        }
+      
+      if (reverse_operands)
+        {
+          rtx temp = cmp0;
+          cmp0 = cmp1;
+          cmp1 = temp;
+        }
+
       if (branch_p)
         {
-          rtx cond = gen_rtx (p_info->test_code_reg, SImode, cmp0, cmp1);
+          rtx cond = gen_rtx (test_code, SImode, cmp0, cmp1);
           rtx label = gen_rtx_LABEL_REF (VOIDmode, destination);
           rtx insn = gen_rtx_SET (VOIDmode, pc_rtx,
                                   gen_rtx_IF_THEN_ELSE (VOIDmode,
@@ -1737,7 +1847,7 @@ gen_conditional_move (rtx *operands, enum machine_mode mode)
  *******************/
 
 int
-nios2_legitimate_address (rtx operand, enum machine_mode mode ATTRIBUTE_UNUSED, 
+nios2_legitimate_address (rtx operand, enum machine_mode mode ATTRIBUTE_UNUSED,
                           int strict)
 {
   int ret_val = 0;
@@ -1805,7 +1915,7 @@ nios2_in_small_data_p (tree exp)
   if (TREE_CODE (exp) == VAR_DECL && DECL_SECTION_NAME (exp))
     {
       const char *section = TREE_STRING_POINTER (DECL_SECTION_NAME (exp));
-      /* ??? these string names need moving into 
+      /* ??? these string names need moving into
          an array in some header file */
       if (nios2_section_threshold > 0
           && (strcmp (section, ".sbss") == 0
@@ -1835,7 +1945,7 @@ nios2_encode_section_info (tree decl, rtx rtl, int first)
   int flags;
 
   default_encode_section_info (decl, rtl, first);
-  
+
   /* Careful not to prod global register variables.  */
   if (GET_CODE (rtl) != MEM)
     return;
@@ -1844,7 +1954,7 @@ nios2_encode_section_info (tree decl, rtx rtl, int first)
     return;
 
   flags = SYMBOL_REF_FLAGS (symbol);
-    
+
   /* We don't want weak variables to be addressed with gp in case they end up with
      value 0 which is not within 2^15 of $gp */
   if (DECL_P (decl) && DECL_WEAK (decl))
@@ -2685,35 +2795,73 @@ NIOS2_CONCAT (nios2_output_fpu_insn_, insn) (rtx i) \
 }
 NIOS2_FOR_ALL_FPU_INSNS
 
+
+
 const char *
 nios2_output_fpu_insn_cmps (rtx insn, enum rtx_code cond)
 {
   static char buf[1024];
   int N;
   const char *opt;
+
+  int operandL = 2;
+  int operandR = 3;
+
+  if ( !have_nios2_fpu_cmp_insn(cond, CMP_SF) && 
+       have_nios2_fpu_cmp_insn(get_reverse_cond(cond), CMP_SF) ) {
+
+    int temp = operandL;
+    operandL = operandR;
+    operandR = temp;
+
+    cond = get_reverse_cond(cond);
+  }
+
   switch (cond)
     {
-    case EQ: N = nios2_fpu_insns[nios2_fpu_nios2_seqsf].N; opt = "fcmpeqs"; break;
-    case NE: N = nios2_fpu_insns[nios2_fpu_nios2_snesf].N; opt = "fcmpnes"; break;
-    case GT: N = nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N; opt = "fcmpgts"; break;
-    case GE: N = nios2_fpu_insns[nios2_fpu_nios2_sgesf].N; opt = "fcmpges"; break;
-    case LT: N = nios2_fpu_insns[nios2_fpu_nios2_sltsf].N; opt = "fcmplts"; break;
-    case LE: N = nios2_fpu_insns[nios2_fpu_nios2_slesf].N; opt = "fcmples"; break;
-    default: fatal_insn ("bad single compare", insn);
+    case EQ:
+      N = nios2_fpu_insns[nios2_fpu_nios2_seqsf].N;
+      opt = "fcmpeqs";
+      break;
+    case NE: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_snesf].N;
+      opt = "fcmpnes";
+      break;
+    case GT: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N;
+      opt = "fcmpgts"; 
+      break;
+    case GE: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_sgesf].N;
+      opt = "fcmpges";
+      break;
+    case LT:
+      N = nios2_fpu_insns[nios2_fpu_nios2_sltsf].N;
+      opt = "fcmplts";
+      break;
+    case LE:
+      N = nios2_fpu_insns[nios2_fpu_nios2_slesf].N;
+      opt = "fcmples"; break;
+    default: 
+      fatal_insn ("bad single compare", insn);
     }
+
   if (N < 0)
     {
       fatal_insn ("attempt to use disabled fpu instruction", insn);
     }
+
   /*
    * ??? This raises the whole vexing issue of how to handle
    * out-of-range branches.  Punt for now, seeing as how nios2-elf-as
    * doesn't even _try_ to handle out-of-range branches yet!
    */
   if (snprintf (buf, sizeof (buf),
-                "custom\t%d, at, %%2, %%3 # %s at, %%2, %%3\n\t"
-                "bne\tat, zero, %%l1",
-                N, opt) >= (int)sizeof (buf))
+                ".set\tnoat\n\t"
+                "custom\t%d, at, %%%d, %%%d # %s at, %%%d, %%%d\n\t"
+                "bne\tat, zero, %%l1\n\t"
+                ".set\tat",
+                N, operandL, operandR, opt, operandL, operandR) >= (int)sizeof (buf))
     {
       fatal_insn ("buffer overflow", insn);
     }
@@ -2726,26 +2874,62 @@ nios2_output_fpu_insn_cmpd (rtx insn, enum rtx_code cond)
   static char buf[1024];
   int N;
   const char *opt;
+
+  int operandL = 2;
+  int operandR = 3;
+
+  if ( !have_nios2_fpu_cmp_insn(cond, CMP_DF) && 
+       have_nios2_fpu_cmp_insn(get_reverse_cond(cond), CMP_DF) ) {
+
+    int temp = operandL;
+    operandL = operandR;
+    operandR = temp;
+
+    cond = get_reverse_cond(cond);
+  }
+
   switch (cond)
     {
-    case EQ: N = nios2_fpu_insns[nios2_fpu_nios2_seqdf].N; opt = "fcmpeqd"; break;
-    case NE: N = nios2_fpu_insns[nios2_fpu_nios2_snedf].N; opt = "fcmpned"; break;
-    case GT: N = nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N; opt = "fcmpgtd"; break;
-    case GE: N = nios2_fpu_insns[nios2_fpu_nios2_sgedf].N; opt = "fcmpged"; break;
-    case LT: N = nios2_fpu_insns[nios2_fpu_nios2_sltdf].N; opt = "fcmpltd"; break;
-    case LE: N = nios2_fpu_insns[nios2_fpu_nios2_sledf].N; opt = "fcmpled"; break;
-    default: fatal_insn ("bad double compare", insn);
+    case EQ: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_seqdf].N; 
+      opt = "fcmpeqd"; 
+      break;
+    case NE: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_snedf].N; 
+      opt = "fcmpned"; 
+      break;
+    case GT: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N; 
+      opt = "fcmpgtd"; 
+      break;
+    case GE: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_sgedf].N; 
+      opt = "fcmpged"; 
+      break;
+    case LT: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_sltdf].N; 
+      opt = "fcmpltd"; 
+      break;
+    case LE: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_sledf].N; 
+      opt = "fcmpled"; 
+      break;
+    default: 
+      fatal_insn ("bad double compare", insn);
     }
+
   if (N < 0 || nios2_fpu_insns[nios2_fpu_nios2_fwrx].N < 0)
     {
       fatal_insn ("attempt to use disabled fpu instruction", insn);
     }
   if (snprintf (buf, sizeof (buf),
-                "custom\t%d, zero, %%2, %%D2 # fwrx %%2\n\t"
-                "custom\t%d, at, %%3, %%D3 # %s at, %%2, %%3\n\t"
-                "bne\tat, zero, %%l1",
-                nios2_fpu_insns[nios2_fpu_nios2_fwrx].N,
-                N, opt) >= (int)sizeof (buf))
+                ".set\tnoat\n\t"
+                "custom\t%d, zero, %%%d, %%D%d # fwrx %%%d\n\t"
+                "custom\t%d, at, %%%d, %%D%d # %s at, %%%d, %%%d\n\t"
+                "bne\tat, zero, %%l1\n\t"
+                ".set\tat",
+                nios2_fpu_insns[nios2_fpu_nios2_fwrx].N, operandL, operandL, operandL,
+                N, operandR, operandR, operandL, operandR, opt) >= (int)sizeof (buf))
     {
       fatal_insn ("buffer overflow", insn);
     }
@@ -2779,7 +2963,7 @@ nios2_issue_rate ()
 
 
 const char *
-asm_output_opcode (FILE *file ATTRIBUTE_UNUSED, 
+asm_output_opcode (FILE *file ATTRIBUTE_UNUSED,
                    const char *ptr ATTRIBUTE_UNUSED)
 {
   const char *p;
@@ -2797,10 +2981,10 @@ asm_output_opcode (FILE *file ATTRIBUTE_UNUSED,
 *****************************************************************************/
 
 void
-init_cumulative_args (CUMULATIVE_ARGS *cum, 
-                      tree fntype ATTRIBUTE_UNUSED, 
-                      rtx libname ATTRIBUTE_UNUSED, 
-                      tree fndecl ATTRIBUTE_UNUSED, 
+init_cumulative_args (CUMULATIVE_ARGS *cum,
+                      tree fntype ATTRIBUTE_UNUSED,
+                      rtx libname ATTRIBUTE_UNUSED,
+                      tree fndecl ATTRIBUTE_UNUSED,
                       int n_named_args ATTRIBUTE_UNUSED)
 {
   cum->regs_used = 0;
@@ -2820,7 +3004,7 @@ init_cumulative_args (CUMULATIVE_ARGS *cum,
    NAMED is nonzero if this argument is a named parameter
    (otherwise it is an extra parameter matching an ellipsis).  */
 rtx
-function_arg (const CUMULATIVE_ARGS *cum, enum machine_mode mode, 
+function_arg (const CUMULATIVE_ARGS *cum, enum machine_mode mode,
               tree type ATTRIBUTE_UNUSED, int named ATTRIBUTE_UNUSED)
 {
   rtx return_rtx = NULL_RTX;
@@ -2858,7 +3042,7 @@ nios2_must_pass_in_stack (enum machine_mode mode, tree type)
 
 int
 function_arg_partial_nregs (const CUMULATIVE_ARGS *cum,
-                            enum machine_mode mode, tree type, 
+                            enum machine_mode mode, tree type,
                             int named ATTRIBUTE_UNUSED)
 {
   HOST_WIDE_INT param_size;
@@ -2895,7 +3079,7 @@ function_arg_partial_nregs (const CUMULATIVE_ARGS *cum,
    (TYPE is null for libcalls where that information may not be available.)  */
 
 void
-function_arg_advance (CUMULATIVE_ARGS *cum, enum machine_mode mode, 
+function_arg_advance (CUMULATIVE_ARGS *cum, enum machine_mode mode,
                       tree type ATTRIBUTE_UNUSED, int named ATTRIBUTE_UNUSED)
 {
   HOST_WIDE_INT param_size;
@@ -2970,8 +3154,8 @@ nios2_return_in_memory (tree type)
 /* ??? It may be possible to eliminate the copyback and implement
        my own va_arg type, but that is more work for now. */
 int
-nios2_setup_incoming_varargs (const CUMULATIVE_ARGS *cum, 
-                              enum machine_mode mode, tree type, 
+nios2_setup_incoming_varargs (const CUMULATIVE_ARGS *cum,
+                              enum machine_mode mode, tree type,
                               int no_rtl)
 {
   CUMULATIVE_ARGS local_cum;
@@ -3061,28 +3245,28 @@ struct builtin_description
                       tree, rtx, rtx, enum machine_mode, int);
 };
 
-static rtx nios2_expand_STXIO (const struct builtin_description *, 
+static rtx nios2_expand_STXIO (const struct builtin_description *,
                                tree, rtx, rtx, enum machine_mode, int);
-static rtx nios2_expand_LDXIO (const struct builtin_description *, 
+static rtx nios2_expand_LDXIO (const struct builtin_description *,
                                tree, rtx, rtx, enum machine_mode, int);
-static rtx nios2_expand_sync (const struct builtin_description *, 
+static rtx nios2_expand_sync (const struct builtin_description *,
                               tree, rtx, rtx, enum machine_mode, int);
-static rtx nios2_expand_rdctl (const struct builtin_description *, 
+static rtx nios2_expand_rdctl (const struct builtin_description *,
                                tree, rtx, rtx, enum machine_mode, int);
-static rtx nios2_expand_wrctl (const struct builtin_description *, 
+static rtx nios2_expand_wrctl (const struct builtin_description *,
                                tree, rtx, rtx, enum machine_mode, int);
 
-static rtx nios2_expand_custom_n (const struct builtin_description *, 
+static rtx nios2_expand_custom_n (const struct builtin_description *,
                                   tree, rtx, rtx, enum machine_mode, int);
-static rtx nios2_expand_custom_Xn (const struct builtin_description *, 
+static rtx nios2_expand_custom_Xn (const struct builtin_description *,
                                    tree, rtx, rtx, enum machine_mode, int);
-static rtx nios2_expand_custom_nX (const struct builtin_description *, 
+static rtx nios2_expand_custom_nX (const struct builtin_description *,
                                    tree, rtx, rtx, enum machine_mode, int);
-static rtx nios2_expand_custom_XnX (const struct builtin_description *, 
+static rtx nios2_expand_custom_XnX (const struct builtin_description *,
                                     tree, rtx, rtx, enum machine_mode, int);
-static rtx nios2_expand_custom_nXX (const struct builtin_description *, 
+static rtx nios2_expand_custom_nXX (const struct builtin_description *,
                                     tree, rtx, rtx, enum machine_mode, int);
-static rtx nios2_expand_custom_XnXX (const struct builtin_description *, 
+static rtx nios2_expand_custom_XnXX (const struct builtin_description *,
                                      tree, rtx, rtx, enum machine_mode, int);
 
 static rtx nios2_expand_custom_zdz (const struct builtin_description *,
@@ -3677,7 +3861,7 @@ nios2_init_builtins ()
    IGNORE is nonzero if the value is to be ignored.  */
 
 static rtx
-nios2_expand_builtin (tree exp, rtx target, rtx subtarget, 
+nios2_expand_builtin (tree exp, rtx target, rtx subtarget,
                       enum machine_mode mode, int ignore)
 {
   const struct builtin_description *d;
@@ -3766,8 +3950,8 @@ nios2_extract_operand (const struct builtin_description *d, int op, int argnum, 
 
 
 static rtx
-nios2_expand_custom_n (const struct builtin_description *d, tree exp, 
-                       rtx target ATTRIBUTE_UNUSED, rtx subtarget ATTRIBUTE_UNUSED, 
+nios2_expand_custom_n (const struct builtin_description *d, tree exp,
+                       rtx target ATTRIBUTE_UNUSED, rtx subtarget ATTRIBUTE_UNUSED,
                        enum machine_mode mode ATTRIBUTE_UNUSED, int ignore ATTRIBUTE_UNUSED)
 {
   tree arglist = TREE_OPERAND (exp, 1);
@@ -3788,9 +3972,9 @@ nios2_expand_custom_n (const struct builtin_description *d, tree exp,
 }
 
 static rtx
-nios2_expand_custom_Xn (const struct builtin_description *d, tree exp, 
-                        rtx target, rtx subtarget ATTRIBUTE_UNUSED, 
-                        enum machine_mode mode ATTRIBUTE_UNUSED, 
+nios2_expand_custom_Xn (const struct builtin_description *d, tree exp,
+                        rtx target, rtx subtarget ATTRIBUTE_UNUSED,
+                        enum machine_mode mode ATTRIBUTE_UNUSED,
                         int ignore ATTRIBUTE_UNUSED)
 {
   tree arglist = TREE_OPERAND (exp, 1);
@@ -3812,8 +3996,8 @@ nios2_expand_custom_Xn (const struct builtin_description *d, tree exp,
 }
 
 static rtx
-nios2_expand_custom_nX (const struct builtin_description *d, tree exp, 
-                        rtx target ATTRIBUTE_UNUSED, rtx subtarget ATTRIBUTE_UNUSED, 
+nios2_expand_custom_nX (const struct builtin_description *d, tree exp,
+                        rtx target ATTRIBUTE_UNUSED, rtx subtarget ATTRIBUTE_UNUSED,
                         enum machine_mode mode ATTRIBUTE_UNUSED, int ignore ATTRIBUTE_UNUSED)
 {
   tree arglist = TREE_OPERAND (exp, 1);
@@ -3842,8 +4026,8 @@ nios2_expand_custom_nX (const struct builtin_description *d, tree exp,
 }
 
 static rtx
-nios2_expand_custom_XnX (const struct builtin_description *d, tree exp, rtx target, 
-                         rtx subtarget ATTRIBUTE_UNUSED, enum machine_mode mode ATTRIBUTE_UNUSED, 
+nios2_expand_custom_XnX (const struct builtin_description *d, tree exp, rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED, enum machine_mode mode ATTRIBUTE_UNUSED,
                          int ignore ATTRIBUTE_UNUSED)
 {
   tree arglist = TREE_OPERAND (exp, 1);
@@ -3874,8 +4058,8 @@ nios2_expand_custom_XnX (const struct builtin_description *d, tree exp, rtx targ
 }
 
 static rtx
-nios2_expand_custom_nXX (const struct builtin_description *d, tree exp, rtx target ATTRIBUTE_UNUSED, 
-                         rtx subtarget ATTRIBUTE_UNUSED, enum machine_mode mode ATTRIBUTE_UNUSED, 
+nios2_expand_custom_nXX (const struct builtin_description *d, tree exp, rtx target ATTRIBUTE_UNUSED,
+                         rtx subtarget ATTRIBUTE_UNUSED, enum machine_mode mode ATTRIBUTE_UNUSED,
                          int ignore ATTRIBUTE_UNUSED)
 {
   tree arglist = TREE_OPERAND (exp, 1);
@@ -3904,8 +4088,8 @@ nios2_expand_custom_nXX (const struct builtin_description *d, tree exp, rtx targ
 }
 
 static rtx
-nios2_expand_custom_XnXX (const struct builtin_description *d, tree exp, rtx target, 
-                          rtx subtarget ATTRIBUTE_UNUSED, enum machine_mode mode ATTRIBUTE_UNUSED, 
+nios2_expand_custom_XnXX (const struct builtin_description *d, tree exp, rtx target,
+                          rtx subtarget ATTRIBUTE_UNUSED, enum machine_mode mode ATTRIBUTE_UNUSED,
                           int ignore ATTRIBUTE_UNUSED)
 {
   tree arglist = TREE_OPERAND (exp, 1);
@@ -3938,8 +4122,8 @@ nios2_expand_custom_XnXX (const struct builtin_description *d, tree exp, rtx tar
 
 
 static rtx
-nios2_expand_STXIO (const struct builtin_description *d, tree exp, rtx target ATTRIBUTE_UNUSED, 
-                    rtx subtarget ATTRIBUTE_UNUSED, enum machine_mode mode ATTRIBUTE_UNUSED, 
+nios2_expand_STXIO (const struct builtin_description *d, tree exp, rtx target ATTRIBUTE_UNUSED,
+                    rtx subtarget ATTRIBUTE_UNUSED, enum machine_mode mode ATTRIBUTE_UNUSED,
                     int ignore ATTRIBUTE_UNUSED)
 {
   tree arglist = TREE_OPERAND (exp, 1);
@@ -3990,8 +4174,8 @@ nios2_expand_STXIO (const struct builtin_description *d, tree exp, rtx target AT
 
 
 static rtx
-nios2_expand_LDXIO (const struct builtin_description * d, tree exp, rtx target, 
-                    rtx subtarget ATTRIBUTE_UNUSED, enum machine_mode mode ATTRIBUTE_UNUSED, 
+nios2_expand_LDXIO (const struct builtin_description * d, tree exp, rtx target,
+                    rtx subtarget ATTRIBUTE_UNUSED, enum machine_mode mode ATTRIBUTE_UNUSED,
                     int ignore ATTRIBUTE_UNUSED)
 {
   tree arglist = TREE_OPERAND (exp, 1);
@@ -4029,10 +4213,10 @@ nios2_expand_LDXIO (const struct builtin_description * d, tree exp, rtx target,
 
 
 static rtx
-nios2_expand_sync (const struct builtin_description * d ATTRIBUTE_UNUSED, 
-                   tree exp ATTRIBUTE_UNUSED, rtx target ATTRIBUTE_UNUSED, 
-                   rtx subtarget ATTRIBUTE_UNUSED, 
-                   enum machine_mode mode ATTRIBUTE_UNUSED, 
+nios2_expand_sync (const struct builtin_description * d ATTRIBUTE_UNUSED,
+                   tree exp ATTRIBUTE_UNUSED, rtx target ATTRIBUTE_UNUSED,
+                   rtx subtarget ATTRIBUTE_UNUSED,
+                   enum machine_mode mode ATTRIBUTE_UNUSED,
                    int ignore ATTRIBUTE_UNUSED)
 {
   emit_insn (gen_sync ());
@@ -4040,10 +4224,10 @@ nios2_expand_sync (const struct builtin_description * d ATTRIBUTE_UNUSED,
 }
 
 static rtx
-nios2_expand_rdctl (const struct builtin_description * d ATTRIBUTE_UNUSED, 
-                   tree exp ATTRIBUTE_UNUSED, rtx target ATTRIBUTE_UNUSED, 
-                   rtx subtarget ATTRIBUTE_UNUSED, 
-                   enum machine_mode mode ATTRIBUTE_UNUSED, 
+nios2_expand_rdctl (const struct builtin_description * d ATTRIBUTE_UNUSED,
+                   tree exp ATTRIBUTE_UNUSED, rtx target ATTRIBUTE_UNUSED,
+                   rtx subtarget ATTRIBUTE_UNUSED,
+                   enum machine_mode mode ATTRIBUTE_UNUSED,
                    int ignore ATTRIBUTE_UNUSED)
 {
   tree arglist = TREE_OPERAND (exp, 1);
@@ -4077,10 +4261,10 @@ nios2_expand_rdctl (const struct builtin_description * d ATTRIBUTE_UNUSED,
 }
 
 static rtx
-nios2_expand_wrctl (const struct builtin_description * d ATTRIBUTE_UNUSED, 
-                   tree exp ATTRIBUTE_UNUSED, rtx target ATTRIBUTE_UNUSED, 
-                   rtx subtarget ATTRIBUTE_UNUSED, 
-                   enum machine_mode mode ATTRIBUTE_UNUSED, 
+nios2_expand_wrctl (const struct builtin_description * d ATTRIBUTE_UNUSED,
+                   tree exp ATTRIBUTE_UNUSED, rtx target ATTRIBUTE_UNUSED,
+                   rtx subtarget ATTRIBUTE_UNUSED,
+                   enum machine_mode mode ATTRIBUTE_UNUSED,
                    int ignore ATTRIBUTE_UNUSED)
 {
   tree arglist = TREE_OPERAND (exp, 1);
