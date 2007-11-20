@@ -48,6 +48,15 @@
     { "", TARGET_DEFAULT, 0 }				\
 }
 
+#undef LIB_SPEC
+#define LIB_SPEC \
+"--start-group %{msmallc: -lsmallc} %{!msmallc: -lc} -lgcc \
+ %{msys-lib=*: -l%*} \
+ %{!msys-lib=*: -lc} \
+ --end-group \
+ %{msys-lib=: %eYou need a library name for -msys-lib=} \
+"
+
 #undef STARTFILE_SPEC 
 #define STARTFILE_SPEC  \
 "%{msys-crt0=*: %*} %{!msys-crt0=*: crt1%O%s} \
