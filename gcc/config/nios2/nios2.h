@@ -46,6 +46,7 @@ Boston, MA 02111-1307, USA.  */
 #define CACHE_VOLATILE_FLAG 0x0020
 #define BYPASS_CACHE_FLAG 0x0040
 #define STACK_CHECK_FLAG 0x0080 
+#define REVERSE_BITFIELDS_FLAG 0x0100
 
 extern int target_flags;
 #define TARGET_HAS_DIV (target_flags & HAS_DIV_FLAG)
@@ -56,6 +57,7 @@ extern int target_flags;
 #define TARGET_CACHE_VOLATILE (target_flags & CACHE_VOLATILE_FLAG)
 #define TARGET_BYPASS_CACHE (target_flags & BYPASS_CACHE_FLAG)
 #define TARGET_STACK_CHECK (target_flags & STACK_CHECK_FLAG)
+#define TARGET_REVERSE_BITFIELDS (target_flags & REVERSE_BITFIELDS_FLAG)
 
 #define TARGET_SWITCHES					\
 {							\
@@ -95,6 +97,10 @@ extern int target_flags;
       N_("Enable stack limit checking.") },				\
     { "no-stack-check", -STACK_CHECK_FLAG,				\
       N_("Disable stack limit checking (default).") },				\
+    { "reverse-bitfields", REVERSE_BITFIELDS_FLAG,          \
+      N_("Reverse the order of bitfields in a struct.") },      \
+    { "no-reverse-bitfields", -REVERSE_BITFIELDS_FLAG,          \
+      N_("Use the normal order of bitfields in a struct (default).") }, \
     { "", TARGET_DEFAULT, 0 }				\
 }
 
@@ -938,6 +944,8 @@ do {									\
 
 #define Pmode SImode
 #define FUNCTION_MODE QImode
+
+#define REGISTER_TARGET_PRAGMAS() nios2_register_target_pragmas ();
 
 #define CASE_VECTOR_MODE Pmode
 

@@ -344,7 +344,8 @@ in the following sections.
 -mhw-mul -mno-hw-mul -mhw-mulx -mno-hw-mulx @gol
 -mno-hw-div -mhw-div @gol
 -mno-stack-check -mstack-check @gol
--msys-crt0= -msys-lib= -msys=nosys }
+-msys-crt0= -msys-lib= -msys=nosys @gol
+-mreverse-bitfields -mno-reverse-bitfields}
 
 @emph{M680x0 Options}
 @gccoptlist{-m68000  -m68020  -m68020-40  -m68020-60  -m68030  -m68040 @gol
@@ -5973,6 +5974,194 @@ simulator.
 the system calls required by the C library, e.g. @code{read}, @code{write}
 etc. The default is to use nosys, this library provides
 stub implementations of the calls and is part of libgloss.
+
+@item -mno-reverse-bitfields
+@itemx -mreverse-bitfields
+@opindex mno-reverse-bitfields
+@opindex mreverse-bitfields
+When enabled, bitfields within a struct are allocated in reverse order.
+This is useful with legacy code that depends on the (inherently
+non-portable) ordering of bitfields via a union.  Given:
+
+@smallexample
+struct inner
+@{
+  unsigned int a:1;
+  unsigned int b:31;
+@};
+
+union outer
+@{
+  struct inner inner;
+  unsigned int val;
+@};
+
+unsigned int f()
+@{
+  union outer o;
+  o.inner.a = 1;
+  o.inner.b = 0;
+  return o.val;
+@}
+@end smallexample
+
+a call to @code{f} will return 1 when compiled with
+@option{-mno-reverse-bitfields} (the default), or 2147483648 when
+compiled with @option{-mreverse-bitfields}.
+
+For structures that are a multiple of 32 bits wide, the reversal is
+done 32 bits at a time.  For structures that are an odd multiple of 16
+bits wide, the reversal is done 16 bits at a time.  For structures
+that are an odd multiple of 8 bits wide, the reversal is done 8 bits
+at a time.  The size of a structure (as measured by the @code{sizeof}
+operator) never changes between @option{-mno-reverse-bitfields} and
+@option{-mreverse-bitfields}.  Nonetheless, there can be some
+confusing corner cases with structs where the compiler has to add
+additional padding to meet alignment restrictions.  Consider:
+
+@smallexample
+struct inner
+@{
+  unsigned int a:1;
+  unsigned int b:15;
+@};
+
+union outer
+@{
+  struct inner inner;
+  unsigned int val;
+@};
+
+unsigned int f()
+@{
+  union outer o;
+  o.val = 0;
+  o.inner.b = 1;
+  return o.val;
+@}
+@end smallexample
+
+a call to @code{f} will return 2 when compiled with
+@option{-mno-reverse-bitfields} (the default), or 65536 when compiled
+with @option{-mreverse-bitfields}.  This is because @code{sizeof
+(inner)} is 4 in both cases.  In the @option{-mno-reverse-bitfields}
+case, the compiler pads the struct at the end to be 4 bytes long,
+effectively doing:
+
+@smallexample
+struct inner
+@{
+  unsigned int a:1;
+  unsigned int b:15;
+  unsigned int padding:16;
+@};
+@end smallexample
+
+In the @option{-mreverse-bitfields} case, the hidden padding is
+reversed along with everything else, yielding the equivalent of:
+
+@smallexample
+struct inner
+@{
+  unsigned int padding:16;
+  unsigned int b:15;
+  unsigned int a:1;
+@};
+@end smallexample
+
+Of course, if we would rather that @code{sizeof (inner)} was 2, we could
+write the struct as:
+
+@smallexample
+struct inner
+@{
+  unsigned short a:1;
+  unsigned short b:15;
+@};
+@end smallexample
+
+and the padding would go away.
+
+In some cases, especially when using the @code{__packed__} attribute,
+there is no well-defined bit reversal that is possible: the compiler
+will issue an error message in this case.  Consider:
+
+@smallexample
+struct invalid
+@{
+  unsigned int f1:1;
+  unsigned int f2:15;
+  unsigned int f3:4;
+  unsigned int f4:4;
+@} __attribute__ ((__packed__));
+@end smallexample
+
+Since @code{sizeof (invalid)} is 3, we are forced to try reversing
+individual bytes in the struct.  But f2 is more than a byte wide, so
+we can't reverse it and still have it be contiguous.  Similar cases
+occur when dealing with arrays or other large contiguous objects:
+
+@smallexample
+struct invalid2
+@{
+  unsigned char f1[5];
+  unsigned char f2[3];
+@};
+@end smallexample
+
+You'll have to rewrite the affected structs to say exactly what you
+mean in odd cases like that.
+
+Finally, note that individual fields are sized as a whole.  The structs
+
+@smallexample
+struct array1
+@{
+  unsigned char f1[3];
+  unsigned char f2;
+@}
+@end smallexample
+
+and:
+
+@smallexample
+struct array2
+@{
+  unsigned char f1a;
+  unsigned char f1b;
+  unsigned char f1c;
+  unsigned char f2;
+@}
+@end smallexample
+
+are not equivalent.  When compiled with @option{-mreverse-bitfields},
+they behave the same as:
+
+@smallexample
+struct array1r
+@{
+  unsigned char f2;
+  unsigned char f1[3];
+@}
+@end smallexample
+
+and:
+
+@smallexample
+struct array2r
+@{
+  unsigned char f2;
+  unsigned char f1c;
+  unsigned char f1b;
+  unsigned char f1a;
+@}
+@end smallexample
+
+would, respectively, when compiled with
+@option{-mno-reverse-bitfields}.  In particular, f1 is treated as a
+single contiguous 24-bit object for purposes of reversal, while f1a,
+f1b, and f1c are treated as individual 8-bit objects that need not
+(and do not) remain contiguous.  Use caution.
 
 @end table
 

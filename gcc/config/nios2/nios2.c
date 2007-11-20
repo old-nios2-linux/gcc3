@@ -47,6 +47,7 @@ Boston, MA 02111-1307, USA.  */
 #include "optabs.h"
 #include "target.h"
 #include "target-def.h"
+#include "c-pragma.h"           /* for c_register_pragma */
 
 /* local prototypes */
 static bool nios2_rtx_costs (rtx, int, int, int *);
@@ -59,6 +60,16 @@ static bool nios2_in_small_data_p (tree);
 static rtx save_reg (int, HOST_WIDE_INT, rtx);
 static rtx restore_reg (int, HOST_WIDE_INT);
 static unsigned int nios2_section_type_flags (tree, const char *, int);
+
+/* 0 --> no #pragma seen
+   1 --> in scope of #pragma reverse_bitfields
+   -1 --> in scope of #pragma no_reverse_bitfields */
+static int nios2_pragma_reverse_bitfields_flag = 0;
+static void nios2_pragma_reverse_bitfields (struct cpp_reader *);
+static void nios2_pragma_no_reverse_bitfields (struct cpp_reader *);
+static tree nios2_handle_struct_attribute (tree *, tree, tree, int, bool *);
+static void nios2_insert_attributes (tree, tree *);
+static bool nios2_reverse_bitfield_layout_p (tree record_type);
 static void nios2_init_builtins (void);
 static rtx nios2_expand_builtin (tree, rtx, rtx, enum machine_mode, int);
 static bool nios2_function_ok_for_sibcall (tree, tree);
@@ -80,6 +91,9 @@ static void nios2_encode_section_info (tree, rtx, int);
 #undef  TARGET_SECTION_TYPE_FLAGS
 #define TARGET_SECTION_TYPE_FLAGS  nios2_section_type_flags
 
+#undef TARGET_REVERSE_BITFIELD_LAYOUT_P
+#define TARGET_REVERSE_BITFIELD_LAYOUT_P nios2_reverse_bitfield_layout_p
+
 #undef TARGET_INIT_BUILTINS
 #define TARGET_INIT_BUILTINS nios2_init_builtins
 #undef TARGET_EXPAND_BUILTIN
@@ -90,6 +104,25 @@ static void nios2_encode_section_info (tree, rtx, int);
 
 #undef TARGET_RTX_COSTS
 #define TARGET_RTX_COSTS nios2_rtx_costs
+
+const struct attribute_spec nios2_attribute_table[] =
+{
+  /* { name, min_len, max_len, decl_req, type_req, fn_type_req, handler } */
+  { "reverse_bitfields",    0, 0, false, false,  false, nios2_handle_struct_attribute },
+  { "no_reverse_bitfields", 0, 0, false, false,  false, nios2_handle_struct_attribute },
+  { "pragma_reverse_bitfields",    0, 0, false, false,  false, NULL },
+  { "pragma_no_reverse_bitfields", 0, 0, false, false,  false, NULL },
+  { NULL,        0, 0, false, false, false, NULL }
+};
+
+#undef TARGET_ATTRIBUTE_TABLE
+#define TARGET_ATTRIBUTE_TABLE nios2_attribute_table
+
+#undef  TARGET_INSERT_ATTRIBUTES
+#define TARGET_INSERT_ATTRIBUTES nios2_insert_attributes
+
+
+
 
 
 struct gcc_target targetm = TARGET_INITIALIZER;
@@ -1197,10 +1230,10 @@ nios2_legitimate_address (rtx operand, enum machine_mode mode ATTRIBUTE_UNUSED,
 
 	if (REG_P (op0) && REG_P (op1))
 	  ret_val = 0;
-	else if (REG_P (op0) && CONSTANT_P (op1))
+    else if (REG_P (op0) && GET_CODE (op1) == CONST_INT)
 	  ret_val = REG_OK_FOR_BASE_P2 (op0, strict)
 	    && SMALL_INT (INTVAL (op1));
-	else if (REG_P (op1) && CONSTANT_P (op0))
+    else if (REG_P (op1) && GET_CODE (op0) == CONST_INT)
 	  ret_val = REG_OK_FOR_BASE_P2 (op1, strict)
 	    && SMALL_INT (INTVAL (op0));
 	else
@@ -1294,7 +1327,142 @@ nios2_section_type_flags (tree decl, const char *name, int reloc)
   return flags;
 }
 
+/* Handle a #pragma reverse_bitfields */
+static void
+nios2_pragma_reverse_bitfields (struct cpp_reader *pfile ATTRIBUTE_UNUSED)
+{
+  nios2_pragma_reverse_bitfields_flag = 1; /* Reverse */
+}
 
+/* Handle a #pragma no_reverse_bitfields */
+static void
+nios2_pragma_no_reverse_bitfields (struct cpp_reader *pfile ATTRIBUTE_UNUSED)
+{
+  nios2_pragma_reverse_bitfields_flag = -1; /* Forward */
+}
+
+void
+nios2_register_target_pragmas ()
+{
+  c_register_pragma (0, "reverse_bitfields",
+                     nios2_pragma_reverse_bitfields);
+  c_register_pragma (0, "no_reverse_bitfields",
+                     nios2_pragma_no_reverse_bitfields);
+}
+
+/* Handle a "reverse_bitfields" or "no_reverse_bitfields" attribute.
+   ??? What do these attributes mean on a union? */
+static tree
+nios2_handle_struct_attribute (tree *node, tree name,
+                               tree args ATTRIBUTE_UNUSED,
+                               int flags ATTRIBUTE_UNUSED,
+                               bool *no_add_attrs)
+{
+  tree *type = NULL;
+  if (DECL_P (*node))
+    {
+      if (TREE_CODE (*node) == TYPE_DECL)
+        {
+          type = &TREE_TYPE (*node);
+        }
+    }
+  else
+    {
+      type = node;
+    }
+
+  if (!(type && (TREE_CODE (*type) == RECORD_TYPE
+                 || TREE_CODE (*type) == UNION_TYPE)))
+    {
+      warning ("`%s' attribute ignored", IDENTIFIER_POINTER (name));
+      *no_add_attrs = true;
+    }
+
+  else if ((is_attribute_p ("reverse_bitfields", name)
+            && lookup_attribute ("no_reverse_bitfields",
+                                 TYPE_ATTRIBUTES (*type)))
+           || ((is_attribute_p ("no_reverse_bitfields", name)
+                && lookup_attribute ("reverse_bitfields",
+                                     TYPE_ATTRIBUTES (*type)))))
+    {
+      warning ("`%s' incompatible attribute ignored",
+               IDENTIFIER_POINTER (name));
+      *no_add_attrs = true;
+    }
+
+  return NULL_TREE;
+}
+
+/*
+  Add __attribute__ ((pragma_reverse_bitfields)) when in the scope of a
+  #pragma reverse_bitfields, or __attribute__
+  ((pragma_no_reverse_bitfields)) when in the scope of a #pragma
+  no_reverse_bitfields.  This gets called before
+  nios2_handle_struct_attribute above, so we can't just reuse the same
+  attributes.
+*/
+static void
+nios2_insert_attributes (tree node, tree *attr_ptr)
+{
+  tree type = NULL;
+  if (DECL_P (node))
+    {
+      if (TREE_CODE (node) == TYPE_DECL)
+        {
+          type = TREE_TYPE (node);
+        }
+    }
+  else
+    {
+      type = node;
+    }
+
+  if (!type
+      || (TREE_CODE (type) != RECORD_TYPE
+          && TREE_CODE (type) != UNION_TYPE))
+    {
+      /* We can ignore things other than structs & unions */
+      return;
+    }
+
+  if (lookup_attribute ("reverse_bitfields", TYPE_ATTRIBUTES (type))
+      || lookup_attribute ("no_reverse_bitfields", TYPE_ATTRIBUTES (type)))
+    {
+      /* If an attribute is already set, it silently overrides the
+         current #pragma, if any */
+      return;
+    }
+
+  if (nios2_pragma_reverse_bitfields_flag)
+    {
+      const char *id = (nios2_pragma_reverse_bitfields_flag == 1 ?
+                        "pragma_reverse_bitfields" :
+                        "pragma_no_reverse_bitfields");
+      /* No attribute set, and we are in the scope of a #pragma */
+      *attr_ptr = tree_cons (get_identifier (id), NULL, *attr_ptr);
+    }
+}
+
+
+/*
+ * The attributes take precedence over the pragmas, which in turn take
+ * precedence over the compile-time switches.
+ */
+static bool
+nios2_reverse_bitfield_layout_p (tree record_type)
+{
+  return ((TARGET_REVERSE_BITFIELDS
+           && !lookup_attribute ("pragma_no_reverse_bitfields",
+                                 TYPE_ATTRIBUTES (record_type))
+           && !lookup_attribute ("no_reverse_bitfields",
+                                 TYPE_ATTRIBUTES (record_type)))
+          || (lookup_attribute ("pragma_reverse_bitfields",
+                                TYPE_ATTRIBUTES (record_type))
+              && !lookup_attribute ("no_reverse_bitfields",
+                                    TYPE_ATTRIBUTES (record_type)))
+          || lookup_attribute ("reverse_bitfields",
+                               TYPE_ATTRIBUTES (record_type)));
+}
 
 
 /*****************************************

@@ -3913,6 +3913,107 @@ array_size_for_constructor (tree val)
   return tree_low_cst (i, 1);
 }
 
+struct reorder_bitfields_key
+{
+  tree field;
+  tree value;
+};
+
+static int
+reorder_bitfields_compare (const void *x1, const void *x2)
+{
+  const struct reorder_bitfields_key *key1 = x1;
+  const struct reorder_bitfields_key *key2 = x2;
+  int pos1 = int_bit_position (key1->field);
+  int pos2 = int_bit_position (key2->field);
+
+  if (pos1 < pos2)
+  {
+    return -1;
+  }
+  else if (pos1 > pos2)
+  {
+    return 1;
+  }
+  else
+  {
+    /*
+     * No two fields should ever have the same bit_position, so
+     * something is horribly wrong.
+     */
+    abort ();
+  }
+}
+
+static void
+reorder_bitfields (tree *first_field, tree *first_value)
+{
+  struct reorder_bitfields_key *keys;
+  size_t field_count;
+  tree field;
+  tree value;
+  size_t i;
+
+  /*
+   * Find out how many fields are in this record, and allocate an array
+   * of keys to hold them all.
+   */
+  field_count = 0;
+  for (field = *first_field; field; field = TREE_CHAIN (field))
+  {
+    field_count++;
+  }
+  if (field_count < 2)
+  {
+    return;
+  }
+  keys = xmalloc (sizeof (struct reorder_bitfields_key) * field_count);
+
+  /*
+   * Make copies of the existing fields and values (using signed integer
+   * zeros for missing values) in the array of keys.
+   */
+  field = *first_field;
+  value = *first_value;
+  for (i = 0; i < field_count; i++)
+  {
+    keys[i].field = copy_node (field);
+    field = TREE_CHAIN (field);
+    if (value)
+    {
+      keys[i].value = copy_node (value);
+      TREE_PURPOSE (keys[i].value) = keys[i].field;
+      value = TREE_CHAIN (value);
+    }
+    else
+    {
+      keys[i].value = tree_cons (keys[i].field, ssize_int (0), 0);
+    }
+  }
+
+  /*
+   * Sort the array based on position of the fields in the record.
+   */
+  qsort (keys, field_count, sizeof (struct reorder_bitfields_key),
+         reorder_bitfields_compare);
+
+  /*
+   * Build new lists out of the sorted array.
+   */
+  for (i = 0; i < field_count - 1; i++)
+  {
+    TREE_CHAIN (keys[i].field) = keys[i+1].field;
+    TREE_CHAIN (keys[i].value) = keys[i+1].value;
+  }
+  *first_field = keys[0].field;
+  *first_value = keys[0].value;
+
+  /*
+   * Get rid of our array of keys and we're done.
+   */
+  free (keys);
+}
+
 /* Subroutine of output_constant, used for CONSTRUCTORs (aggregate constants).
    Generate at least SIZE bytes, padding if necessary.  */
 
@@ -3929,12 +4030,29 @@ output_constructor (tree exp, unsigned HOST_WIDE_INT size,
   /* Nonzero means BYTE contains part of a byte, to be output.  */
   int byte_buffer_in_use = 0;
   int byte = 0;
+  tree first_link = CONSTRUCTOR_ELTS (exp);
 
   if (HOST_BITS_PER_WIDE_INT < BITS_PER_UNIT)
     abort ();
 
   if (TREE_CODE (type) == RECORD_TYPE)
+  {
+    if ((*targetm.reverse_bitfield_layout_p) (type))
+    {
+      /*
+       * If we're reversing bitfields, we have to reverse the order in
+       * which constructors containing bitfields are output.  The
+       * easiest way to do that is to reorder the constructor elements
+       * and fields to be in memory-order.
+       */
     field = TYPE_FIELDS (type);
+      reorder_bitfields (&field, &first_link);
+    }
+    else
+    {
+      field = TYPE_FIELDS (type);
+    }
+  }
 
   if (TREE_CODE (type) == ARRAY_TYPE
       && TYPE_DOMAIN (type) != 0)
@@ -3949,7 +4067,7 @@ output_constructor (tree exp, unsigned HOST_WIDE_INT size,
      There is always a maximum of one element in the chain LINK for unions
      (even if the initializer in a source program incorrectly contains
      more one).  */
-  for (link = CONSTRUCTOR_ELTS (exp);
+  for (link = first_link;
        link;
        link = TREE_CHAIN (link),
        field = field ? TREE_CHAIN (field) : 0)

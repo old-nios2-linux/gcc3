@@ -1435,6 +1435,355 @@ finalize_type_size (tree type)
     }
 }
 
+static void
+reverse_bitfield_layout (record_layout_info rli)
+{
+  tree field;
+  tree rev_size;
+  unsigned int rev_size_int;
+
+  /*
+   * The size of the words we'll be reversing.  Normally, we reverse
+   * entire SImode words.  However, if the entire struct's size isn't an
+   * exact multiple of the size of SImode, we can reverse HImode or even
+   * QImode pieces.  In the examples below, assume SImode/int is 32
+   * bits, HImode/short is 16 bits, and QImode/char is 8 bits.
+   * Consider:
+   *
+   *   struct s1
+   *   {
+   *     int f1:1;
+   *     int f2:31;
+   *   };
+   *
+   *   struct s2
+   *   {
+   *     int f1:1;
+   *     int f2:15;
+   *   } __attribute__ ((__packed__));
+   *
+   *   struct s3
+   *   {
+   *     short f1:1;
+   *     short f2:15;
+   *   };
+   *
+   *   struct s4
+   *   {
+   *     int f1:1;
+   *     int f2:15;
+   *   };
+   *
+   *   struct s5
+   *   {
+   *     int f1:8;
+   *     int f2:8;
+   *     int f3:4;
+   *     int f4:4;
+   *   } __attribute__ ((__packed__));
+   *
+   *   struct s6
+   *   {
+   *     int f1:1;
+   *     int f2:15;
+   *     int f3:4;
+   *     int f4:4;
+   *     int f5:8;
+   *   };
+   *
+   *   struct s7
+   *   {
+   *     int f1:1;
+   *     int f2:15;
+   *     int f3:4;
+   *     int f4:4;
+   *   } __attribute__ ((__packed__));
+   *
+   *   struct s8
+   *   {
+   *     char f1;
+   *     short f2;
+   *     char f3;
+   *   };
+   *
+   *   struct s9
+   *   {
+   *     char f1;
+   *     short f2;
+   *     char f3;
+   *   } __attribute__ ((__packed__));
+   *
+   *   struct s10
+   *   {
+   *     char f1;
+   *     short f2;
+   *     char f3;
+   *     short f4;
+   *   };
+   *
+   *   struct s11
+   *   {
+   *     char f1[5];
+   *     int f2;
+   *   };
+   *
+   *   struct s12
+   *   {
+   *     char f1[5];
+   *     char f2[3];
+   *     int f3;
+   *   };
+   *
+   *   struct s13
+   *   {
+   *     char f1[3];
+   *     int f2;
+   *   };
+   *
+   *   struct s14
+   *   {
+   *     char f1a;
+   *     char f1b;
+   *     char f1c;
+   *     int f2;
+   *   };
+   *
+   * Then we have:
+   *
+   *   sizeof (struct s1) == 4
+   *   sizeof (struct s2) == 2
+   *   sizeof (struct s3) == 2
+   *   sizeof (struct s4) == 4
+   *   sizeof (struct s5) == 3
+   *   sizeof (struct s6) == 4
+   *   sizeof (struct s7) == 3
+   *   sizeof (struct s8) == 6
+   *   sizeof (struct s9) == 4
+   *   sizeof (struct s10) == 8
+   *   sizeof (struct s11) == 12
+   *   sizeof (struct s12) == 12
+   *
+   * We want the equivalent reversed bitfield structs to be:
+   *
+   *   struct s1r
+   *   {
+   *     int f2:31;
+   *     int f1:1;
+   *   };
+   *
+   *   struct s2r
+   *   {
+   *     int f2:15;
+   *     int f1:1;
+   *   } __attribute__ ((__packed__));
+   *
+   *   struct s3r
+   *   {
+   *     short f2:15;
+   *     short f1:1;
+   *   };
+   *
+   *   struct s4r
+   *   {
+   *     int unnamed:16;
+   *     int f2:15;
+   *     int f1:1;
+   *   };
+   *
+   *   struct s5r
+   *   {
+   *     int f1:8;
+   *     int f2:8;
+   *     int f4:4;
+   *     int f3:4;
+   *   } __attribute__ ((__packed__));
+   *
+   *   struct s6r
+   *   {
+   *     int f5:8;
+   *     int f4:4;
+   *     int f3:4;
+   *     int f2:15;
+   *     int f1:1;
+   *   };
+   *
+   *   struct s7r
+   *   {
+   *     #error cannot reverse bitfield
+   *   } __attribute__ ((__packed__));
+   *
+   *   struct s8r
+   *   {
+   *     char unnamed1;
+   *     char f1;
+   *     short f2;
+   *     char unnamed2;
+   *     char f3;
+   *   };
+   *
+   *   struct s9r
+   *   {
+   *     char f3;
+   *     short f2;
+   *     char f1;
+   *   } __attribute__ ((__packed__));
+   *
+   *   struct s10r
+   *   {
+   *     short f2;
+   *     char unnamed1;
+   *     char f1;
+   *     short f4;
+   *     char unnamed2;
+   *     char f3;
+   *   };
+   *
+   *   struct s11r
+   *   {
+   *     char f1[5];
+   *     int f2;
+   *   };
+   *
+   *   struct s12r
+   *   {
+   *     #error cannot reverse bitfield
+   *   };
+   *
+   *   struct s13r
+   *   {
+   *     char unnamed;
+   *     char f1[3];
+   *     int f2;
+   *   };
+   *
+   *   struct s14r
+   *   {
+   *     char unnamed;
+   *     char f1c;
+   *     char f1b;
+   *     char f1a;
+   *     int f2;
+   *   };
+   *
+   * Note that the s4, s8, s10, s13, and s14 cases produce somewhat
+   * suprising results: the normally hidden padding bytes the compiler
+   * adds are also reversed.  Further note that s13 and s14 are not
+   * equivalent: the f1 field in s13 is 24-bits wide, and is reversed
+   * accordingly, while the three fields f1a, f1b, and f1c in s14 are
+   * reversed as individual bytes.
+   *
+   * The s7 and s12 cases produce an error: we can't reverse a bitfield
+   * that is larger than word size we're reversing.  The error is
+   * suppressed in the s11 case since the field in question and the
+   * field that follows are both word aligned.
+   */
+
+  /*
+   * First, figure out what size words to reverse.  We look at the total
+   * number of bits currently in use by the struct, rounded up to the
+   * next multiple of rli->record_align, to decide.
+   */
+  {
+    int bits_in_use = TREE_INT_CST_LOW (round_up (rli_size_so_far (rli),
+                                                  rli->record_align));
+    unsigned int size;
+    for (size = GET_MODE_BITSIZE (SImode);
+         size >= GET_MODE_BITSIZE (QImode);
+         size /= 2)
+    {
+      if (bits_in_use % size == 0)
+      {
+        break;
+      }
+    }
+    if (size < GET_MODE_BITSIZE (QImode))
+    {
+      /*
+       * rli->record_align should never be less than QImode, even
+       * for packed structs.
+       */
+      abort ();
+    }
+    rev_size = size_int_type (size, bitsizetype);
+    rev_size_int = size;
+  }
+
+  /*
+   * Then, iterate over the fields, reversing them as we go.
+   */
+  for (field = TYPE_FIELDS (rli->t); field; field = TREE_CHAIN (field))
+    {
+      tree type = TREE_TYPE (field);
+      if (TREE_CODE (field) != FIELD_DECL)
+        {
+          continue;
+        }
+      if (TREE_CODE (field) == ERROR_MARK || TREE_CODE (type) == ERROR_MARK)
+        {
+          return;
+        }
+      {
+        tree offset = DECL_FIELD_OFFSET (field);
+        tree offset_type = TREE_TYPE (offset);
+        tree bit_offset = DECL_FIELD_BIT_OFFSET (field);
+        tree bit_offset_type = TREE_TYPE (bit_offset);
+        tree bit = bit_from_pos (offset, bit_offset);
+        tree true_size = DECL_SIZE (field);
+        pos_from_bit (&offset, &bit_offset, rev_size_int, bit);
+        bit_offset = size_binop (MINUS_EXPR,
+                                 size_binop (MINUS_EXPR, rev_size, true_size),
+                                 bit_offset);
+        if (TREE_INT_CST_HIGH (bit_offset) != 0)
+        {
+          /*
+           * This happens when a field spans a rev_size boundary (see
+           * example s7 above): rather than try to come up with some
+           * well-defined, but non-intuitive definition for this case,
+           * just issue an error.  It can also happen for large fields,
+           * e.g. arrays or other structs: if these large fields were
+           * already aligned, leave them be; otherwise issue the error
+           * in this case as well.
+           */
+          if ((TREE_INT_CST_HIGH (true_size) != 0
+               || TREE_INT_CST_LOW (true_size) > rev_size_int)
+              && TREE_INT_CST_HIGH (DECL_FIELD_BIT_OFFSET (field)) == 0
+              && TREE_INT_CST_LOW (DECL_FIELD_BIT_OFFSET (field)) == 0)
+          {
+            tree next_field = TREE_CHAIN (field);
+            if (!next_field)
+            {
+              /* No following field, so we're ok. */
+              continue;
+            }
+            else
+            {
+              tree next_offset = DECL_FIELD_OFFSET (next_field);
+              tree next_bit_offset = DECL_FIELD_BIT_OFFSET (next_field);
+              tree next_bit = bit_from_pos (next_offset, next_bit_offset);
+              pos_from_bit (&next_offset, &next_bit_offset, rev_size_int,
+                            next_bit);
+              if (TREE_INT_CST_HIGH (next_bit_offset) == 0
+                  && TREE_INT_CST_LOW (next_bit_offset) == 0)
+              {
+                /* Following field is aligned wrt rev_size_int boundary,
+                   so we're ok. */
+                continue;
+              }
+            }
+          }
+          error ("unable to reverse bitfields in structure");
+          return;
+        }
+        bit = bit_from_pos (offset, bit_offset);
+        pos_from_bit (&offset, &bit_offset, rli->offset_align, bit);
+        TREE_TYPE (offset) = offset_type;
+        DECL_FIELD_OFFSET (field) = offset;
+        TREE_TYPE (bit_offset) = bit_offset_type;
+        DECL_FIELD_BIT_OFFSET (field) = bit_offset;
+      }
+    }
+}
+
 /* Do all of the work required to layout the type indicated by RLI,
    once the fields have been laid out.  This function will call `free'
    for RLI, unless FREE_P is false.  Passing a value other than false
@@ -1444,6 +1793,12 @@ finalize_type_size (tree type)
 void
 finish_record_layout (record_layout_info rli, int free_p)
 {
+  /* Optionally reverse the placement of bitfields within the record */
+  if ((* targetm.reverse_bitfield_layout_p) (rli->t))
+    {
+      reverse_bitfield_layout (rli);
+    }
+
   /* Compute the final size.  */
   finalize_record_size (rli);
 
