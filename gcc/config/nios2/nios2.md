@@ -1171,7 +1171,7 @@
 
 (define_insn "fixsfsi2"
   [(set (match_operand:SI 0 "register_operand" "=r")
-        (fix:SI (match_operand:SF 1 "register_operand" "r")))]
+        (fix:SI (match_operand:SF 1 "general_operand" "r")))]
   "nios2_fpu_insns[nios2_fpu_fixsfsi2].N >= 0"
   {
     return (*nios2_fpu_insns[nios2_fpu_fixsfsi2].output) (insn);
@@ -1180,7 +1180,7 @@
 
 (define_insn "fixdfsi2"
   [(set (match_operand:SI 0 "register_operand" "=r")
-        (fix:SI (match_operand:DF 1 "register_operand" "r")))]
+        (fix:SI (match_operand:DF 1 "general_operand" "r")))]
   "nios2_fpu_insns[nios2_fpu_fixdfsi2].N >= 0"
   {
     return (*nios2_fpu_insns[nios2_fpu_fixdfsi2].output) (insn);
@@ -1189,7 +1189,7 @@
 
 (define_insn "fixunssfsi2"
   [(set (match_operand:SI 0 "register_operand" "=r")
-        (unsigned_fix:SI (match_operand:SF 1 "register_operand" "r")))]
+        (unsigned_fix:SI (match_operand:SF 1 "general_operand" "r")))]
   "nios2_fpu_insns[nios2_fpu_fixunssfsi2].N >= 0"
   {
     return (*nios2_fpu_insns[nios2_fpu_fixunssfsi2].output) (insn);
@@ -1198,7 +1198,7 @@
 
 (define_insn "fixunsdfsi2"
   [(set (match_operand:SI 0 "register_operand" "=r")
-        (unsigned_fix:SI (match_operand:DF 1 "register_operand" "r")))]
+        (unsigned_fix:SI (match_operand:DF 1 "general_operand" "r")))]
   "nios2_fpu_insns[nios2_fpu_fixunsdfsi2].N >= 0"
   {
     return (*nios2_fpu_insns[nios2_fpu_fixunsdfsi2].output) (insn);
@@ -1207,7 +1207,7 @@
 
 (define_insn "extendsfdf2"
   [(set (match_operand:DF 0 "register_operand" "=r")
-        (float_extend:DF (match_operand:SF 1 "register_operand" "r")))]
+        (float_extend:DF (match_operand:SF 1 "general_operand" "r")))]
   "nios2_fpu_insns[nios2_fpu_extendsfdf2].N >= 0"
   {
     return (*nios2_fpu_insns[nios2_fpu_extendsfdf2].output) (insn);
@@ -1216,7 +1216,7 @@
 
 (define_insn "truncdfsf2"
   [(set (match_operand:SF 0 "register_operand" "=r")
-        (float_truncate:SF (match_operand:DF 1 "register_operand" "r")))]
+        (float_truncate:SF (match_operand:DF 1 "general_operand" "r")))]
   "nios2_fpu_insns[nios2_fpu_truncdfsf2].N >= 0"
   {
     return (*nios2_fpu_insns[nios2_fpu_truncdfsf2].output) (insn);
@@ -1471,12 +1471,12 @@
   [(set (cc0)
         (compare:CC (match_operand:SF 0 "register_operand" "")
                     (match_operand:SF 1 "register_operand" "")))]
-  "nios2_fpu_insns[nios2_fpu_nios2_sltsf].N >= 0
-   && nios2_fpu_insns[nios2_fpu_nios2_slesf].N >= 0
+  "(nios2_fpu_insns[nios2_fpu_nios2_sltsf].N >= 0
+   || nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N >= 0)
+   && (nios2_fpu_insns[nios2_fpu_nios2_sgesf].N >= 0
+   || nios2_fpu_insns[nios2_fpu_nios2_slesf].N >= 0)
    && nios2_fpu_insns[nios2_fpu_nios2_seqsf].N >= 0
-   && nios2_fpu_insns[nios2_fpu_nios2_snesf].N >= 0
-   && nios2_fpu_insns[nios2_fpu_nios2_sgesf].N >= 0
-   && nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N >= 0"
+   && nios2_fpu_insns[nios2_fpu_nios2_snesf].N >= 0"
 {
   branch_cmp[0] = operands[0];
   branch_cmp[1] = operands[1];
@@ -1488,12 +1488,12 @@
   [(set (cc0)
         (compare:CC (match_operand:DF 0 "register_operand" "")
                     (match_operand:DF 1 "register_operand" "")))]
-  "nios2_fpu_insns[nios2_fpu_nios2_sltdf].N >= 0
-   && nios2_fpu_insns[nios2_fpu_nios2_sledf].N >= 0
+  "(nios2_fpu_insns[nios2_fpu_nios2_sltdf].N >= 0
+   || nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N >= 0)   
+   && (nios2_fpu_insns[nios2_fpu_nios2_sgedf].N >= 0
+   || nios2_fpu_insns[nios2_fpu_nios2_sledf].N >= 0)
    && nios2_fpu_insns[nios2_fpu_nios2_seqdf].N >= 0
-   && nios2_fpu_insns[nios2_fpu_nios2_snedf].N >= 0
-   && nios2_fpu_insns[nios2_fpu_nios2_sgedf].N >= 0
-   && nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N >= 0"
+   && nios2_fpu_insns[nios2_fpu_nios2_snedf].N >= 0"
 {
   branch_cmp[0] = operands[0];
   branch_cmp[1] = operands[1];

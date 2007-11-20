@@ -1094,6 +1094,21 @@ NIOS2_FOR_ALL_FPU_INSNS
       fdivs = 255;
       flag_single_precision_constant = 1;
     }
+  else if (!strcasecmp (cfg, "72-3"))
+    {
+      floatus = 243;
+      fixsi   = 244;
+      floatis = 245;
+      fcmpgts = 246;
+      fcmples = 249;
+      fcmpeqs = 250;
+      fcmpnes = 251;
+      fmuls   = 252;
+      fadds   = 253;
+      fsubs   = 254;
+      fdivs   = 255;
+      flag_single_precision_constant = 1;
+    }
   else
     {
       warning ("ignoring unrecognized %sfpu-cfg' value `%s'",
@@ -1503,6 +1518,78 @@ map_test_to_internal_test (enum rtx_code test_code)
   return test;
 }
 
+bool have_nios2_fpu_cmp_insn( enum rtx_code cond_t, enum cmp_type cmp_t );
+enum rtx_code get_reverse_cond(enum rtx_code cond_t);
+
+bool
+have_nios2_fpu_cmp_insn( enum rtx_code cond_t, enum cmp_type cmp_t )
+{
+  if (cmp_t == CMP_SF)
+    {
+      switch (cond_t) {
+      case EQ: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_seqsf].N >= 0);
+      case NE: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_snesf].N >= 0);
+      case GT: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N >= 0);
+      case GE: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sgesf].N >= 0);
+      case LT: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sltsf].N >= 0);
+      case LE: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_slesf].N >= 0);
+      default: 
+        break;
+      }
+    }
+  else if (cmp_t == CMP_DF)
+    {
+      switch (cond_t) {
+      case EQ: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_seqdf].N >= 0);
+      case NE: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_snedf].N >= 0);
+      case GT: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N >= 0);
+      case GE: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sgedf].N >= 0);
+      case LT: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sltdf].N >= 0);
+      case LE: 
+        return (nios2_fpu_insns[nios2_fpu_nios2_sledf].N >= 0);
+      default: 
+        break;
+      }
+    }
+
+  return false;
+}
+
+/* Note that get_reverse_cond() is not the same as get_inverse_cond()
+    get_reverse_cond() means that if the operand order is reversed,
+    what is the operand that is needed to generate the same condition?
+*/
+enum rtx_code
+get_reverse_cond(enum rtx_code cond_t)
+{
+	switch (cond_t)
+	{
+     	case GT: return LT;
+        case GE: return LE;
+        case LT: return GT;
+        case LE: return GE;
+        case GTU: return LTU;
+        case GEU: return LEU;
+        case LTU: return GTU;
+        case LEU: return GEU;
+        default: break;
+    }
+
+	return cond_t;
+}
+
+
 /* Generate the code to compare (and possibly branch) two integer values
    TEST_CODE is the comparison code we are trying to emulate 
      (or implement directly)
@@ -1558,8 +1645,6 @@ gen_int_relational (enum rtx_code test_code, /* relational test (EQ, etc) */
   int branch_p;
 
 
-
-
   test = map_test_to_internal_test (test_code);
   if (test == ITEST_MAX)
     abort ();
@@ -1575,15 +1660,40 @@ gen_int_relational (enum rtx_code test_code, /* relational test (EQ, etc) */
   /* Handle floating point comparison directly. */
   if (branch_type == CMP_SF || branch_type == CMP_DF)
     {
+
+      bool reverse_operands = false;
+
       enum machine_mode float_mode = (branch_type == CMP_SF) ? SFmode : DFmode;
+
       if (!register_operand (cmp0, float_mode)
           || !register_operand (cmp1, float_mode))
         {
           abort ();
         }
+
       if (branch_p)
         {
-          rtx cond = gen_rtx (p_info->test_code_reg, SImode, cmp0, cmp1);
+        test_code = p_info->test_code_reg;
+        reverse_operands = (p_info->reverse_regs);
+      }
+
+      if ( !have_nios2_fpu_cmp_insn(test_code, branch_type) &&
+           have_nios2_fpu_cmp_insn(get_reverse_cond(test_code), branch_type) )
+        {
+          test_code = get_reverse_cond(test_code);
+          reverse_operands = !reverse_operands;
+        }
+      
+      if (reverse_operands)
+        {
+          rtx temp = cmp0;
+          cmp0 = cmp1;
+          cmp1 = temp;
+        }
+
+      if (branch_p)
+        {
+          rtx cond = gen_rtx (test_code, SImode, cmp0, cmp1);
           rtx label = gen_rtx_LABEL_REF (VOIDmode, destination);
           rtx insn = gen_rtx_SET (VOIDmode, pc_rtx,
                                   gen_rtx_IF_THEN_ELSE (VOIDmode,
@@ -2685,35 +2795,73 @@ NIOS2_CONCAT (nios2_output_fpu_insn_, insn) (rtx i) \
 }
 NIOS2_FOR_ALL_FPU_INSNS
 
+
+
 const char *
 nios2_output_fpu_insn_cmps (rtx insn, enum rtx_code cond)
 {
   static char buf[1024];
   int N;
   const char *opt;
+
+  int operandL = 2;
+  int operandR = 3;
+
+  if ( !have_nios2_fpu_cmp_insn(cond, CMP_SF) && 
+       have_nios2_fpu_cmp_insn(get_reverse_cond(cond), CMP_SF) ) {
+
+    int temp = operandL;
+    operandL = operandR;
+    operandR = temp;
+
+    cond = get_reverse_cond(cond);
+  }
+
   switch (cond)
     {
-    case EQ: N = nios2_fpu_insns[nios2_fpu_nios2_seqsf].N; opt = "fcmpeqs"; break;
-    case NE: N = nios2_fpu_insns[nios2_fpu_nios2_snesf].N; opt = "fcmpnes"; break;
-    case GT: N = nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N; opt = "fcmpgts"; break;
-    case GE: N = nios2_fpu_insns[nios2_fpu_nios2_sgesf].N; opt = "fcmpges"; break;
-    case LT: N = nios2_fpu_insns[nios2_fpu_nios2_sltsf].N; opt = "fcmplts"; break;
-    case LE: N = nios2_fpu_insns[nios2_fpu_nios2_slesf].N; opt = "fcmples"; break;
-    default: fatal_insn ("bad single compare", insn);
+    case EQ:
+      N = nios2_fpu_insns[nios2_fpu_nios2_seqsf].N;
+      opt = "fcmpeqs";
+      break;
+    case NE: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_snesf].N;
+      opt = "fcmpnes";
+      break;
+    case GT: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N;
+      opt = "fcmpgts"; 
+      break;
+    case GE: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_sgesf].N;
+      opt = "fcmpges";
+      break;
+    case LT:
+      N = nios2_fpu_insns[nios2_fpu_nios2_sltsf].N;
+      opt = "fcmplts";
+      break;
+    case LE:
+      N = nios2_fpu_insns[nios2_fpu_nios2_slesf].N;
+      opt = "fcmples"; break;
+    default: 
+      fatal_insn ("bad single compare", insn);
     }
+
   if (N < 0)
     {
       fatal_insn ("attempt to use disabled fpu instruction", insn);
     }
+
   /*
    * ??? This raises the whole vexing issue of how to handle
    * out-of-range branches.  Punt for now, seeing as how nios2-elf-as
    * doesn't even _try_ to handle out-of-range branches yet!
    */
   if (snprintf (buf, sizeof (buf),
-                "custom\t%d, at, %%2, %%3 # %s at, %%2, %%3\n\t"
-                "bne\tat, zero, %%l1",
-                N, opt) >= (int)sizeof (buf))
+                ".set\tnoat\n\t"
+                "custom\t%d, at, %%%d, %%%d # %s at, %%%d, %%%d\n\t"
+                "bne\tat, zero, %%l1\n\t"
+                ".set\tat",
+                N, operandL, operandR, opt, operandL, operandR) >= (int)sizeof (buf))
     {
       fatal_insn ("buffer overflow", insn);
     }
@@ -2726,26 +2874,62 @@ nios2_output_fpu_insn_cmpd (rtx insn, enum rtx_code cond)
   static char buf[1024];
   int N;
   const char *opt;
+
+  int operandL = 2;
+  int operandR = 3;
+
+  if ( !have_nios2_fpu_cmp_insn(cond, CMP_DF) && 
+       have_nios2_fpu_cmp_insn(get_reverse_cond(cond), CMP_DF) ) {
+
+    int temp = operandL;
+    operandL = operandR;
+    operandR = temp;
+
+    cond = get_reverse_cond(cond);
+  }
+
   switch (cond)
     {
-    case EQ: N = nios2_fpu_insns[nios2_fpu_nios2_seqdf].N; opt = "fcmpeqd"; break;
-    case NE: N = nios2_fpu_insns[nios2_fpu_nios2_snedf].N; opt = "fcmpned"; break;
-    case GT: N = nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N; opt = "fcmpgtd"; break;
-    case GE: N = nios2_fpu_insns[nios2_fpu_nios2_sgedf].N; opt = "fcmpged"; break;
-    case LT: N = nios2_fpu_insns[nios2_fpu_nios2_sltdf].N; opt = "fcmpltd"; break;
-    case LE: N = nios2_fpu_insns[nios2_fpu_nios2_sledf].N; opt = "fcmpled"; break;
-    default: fatal_insn ("bad double compare", insn);
+    case EQ: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_seqdf].N; 
+      opt = "fcmpeqd"; 
+      break;
+    case NE: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_snedf].N; 
+      opt = "fcmpned"; 
+      break;
+    case GT: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N; 
+      opt = "fcmpgtd"; 
+      break;
+    case GE: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_sgedf].N; 
+      opt = "fcmpged"; 
+      break;
+    case LT: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_sltdf].N; 
+      opt = "fcmpltd"; 
+      break;
+    case LE: 
+      N = nios2_fpu_insns[nios2_fpu_nios2_sledf].N; 
+      opt = "fcmpled"; 
+      break;
+    default: 
+      fatal_insn ("bad double compare", insn);
     }
+
   if (N < 0 || nios2_fpu_insns[nios2_fpu_nios2_fwrx].N < 0)
     {
       fatal_insn ("attempt to use disabled fpu instruction", insn);
     }
   if (snprintf (buf, sizeof (buf),
-                "custom\t%d, zero, %%2, %%D2 # fwrx %%2\n\t"
-                "custom\t%d, at, %%3, %%D3 # %s at, %%2, %%3\n\t"
-                "bne\tat, zero, %%l1",
-                nios2_fpu_insns[nios2_fpu_nios2_fwrx].N,
-                N, opt) >= (int)sizeof (buf))
+                ".set\tnoat\n\t"
+                "custom\t%d, zero, %%%d, %%D%d # fwrx %%%d\n\t"
+                "custom\t%d, at, %%%d, %%D%d # %s at, %%%d, %%%d\n\t"
+                "bne\tat, zero, %%l1\n\t"
+                ".set\tat",
+                nios2_fpu_insns[nios2_fpu_nios2_fwrx].N, operandL, operandL, operandL,
+                N, operandR, operandR, operandL, operandR, opt) >= (int)sizeof (buf))
     {
       fatal_insn ("buffer overflow", insn);
     }
