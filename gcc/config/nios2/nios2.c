@@ -2255,12 +2255,6 @@ nios2_print_operand (FILE *file, rtx op, int letter)
 	  return;
 	}
     }
-      else if (letter == 'D')
-        {
-          fprintf (file, "%s", reg_names[REGNO (op)+1]);
-          return;
-        }
-      break;
 
 
   switch (GET_CODE (op))
@@ -2271,6 +2265,12 @@ nios2_print_operand (FILE *file, rtx op, int letter)
 	  fprintf (file, "%s", reg_names[REGNO (op)]);
 	  return;
 	}
+      else if (letter == 'D')
+        {
+          fprintf (file, "%s", reg_names[REGNO (op)+1]);
+          return;
+        }
+      break;
 
     case CONST_INT:
       if (INTVAL (op) == 0 && letter == 'z')
@@ -2312,6 +2312,7 @@ nios2_print_operand (FILE *file, rtx op, int letter)
 	  fprintf (file, ")");
 	  return;
 	}
+      break;
 
 
     case SUBREG:
@@ -2321,6 +2322,7 @@ nios2_print_operand (FILE *file, rtx op, int letter)
 	  output_address (op);
 	  return;
 	}
+      break;
 
     case CODE_LABEL:
       if (letter == 0)
@@ -2328,11 +2330,11 @@ nios2_print_operand (FILE *file, rtx op, int letter)
 	  output_addr_const (file, op);
 	  return;
 	}
+      break;
 
     default:
       break;
     }
-      break;
 
   fprintf (stderr, "Missing way to print (%c) ", letter);
   debug_rtx (op);
@@ -2413,7 +2415,6 @@ nios2_print_operand_address (FILE *file, rtx op)
     default:
       break;
     }
-      break;
 
   fprintf (stderr, "Missing way to print address\n");
   debug_rtx (op);
@@ -2487,7 +2488,6 @@ reg_or_0_operand (rtx op, enum machine_mode mode)
     default:
       break;
     }
-      break;
 
   return register_operand (op, mode);
 }
