@@ -1322,11 +1322,15 @@ m32rle-*-linux*)
 	fi
 	;;
 # JBG
-nios2-*-*_eb)
+nios2-*-elf*_eb)
 	tm_file="elfos.h nios2/big.h ${tm_file}"
 	;;
-nios2-*-*)
+nios2-*-elf*)
 	tm_file="elfos.h ${tm_file}"
+	;;
+nios2-*-uclibc*)	# Altera Nios2 running uClinux with uClibc
+	tm_file="elfos.h ${tm_file} nios2/nios2-uclibc.h"
+	tmake_file=nios2/t-nios2-uclibc
 	;;
 # m68hc11 and m68hc12 share the same machine description.
 m68hc11-*-*|m6811-*-*)
