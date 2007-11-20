@@ -1375,6 +1375,15 @@ Matches immediates which are addresses in the small
 data section and therefore can be added to @code{gp}
 as a 16-bit immediate to re-create their 32-bit value.
 
+@item D@var{nn}
+For a given two digit @var{nn} constrains the operand
+to the corresponding register. Example: D02 forces the
+operand into register r2. The side effect of using this
+operand constraint is that reload may not be able to 
+meet the constraint. If reload fails, an error message
+about failing to find any register to spill in the
+D@var{nn}_REG register class will be emitted.
+
 @end table
 
 

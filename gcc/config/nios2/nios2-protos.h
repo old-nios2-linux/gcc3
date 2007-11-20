@@ -28,7 +28,7 @@ extern int nios2_can_use_return_insn (void);
 extern void expand_prologue (void);
 extern void expand_epilogue (bool);
 extern void function_profiler (FILE *, int);
-
+extern enum reg_class reg_class_from_constraint (char, char *);
 
 #ifdef RTX_CODE
 extern int nios2_legitimate_address (rtx, enum machine_mode, int);

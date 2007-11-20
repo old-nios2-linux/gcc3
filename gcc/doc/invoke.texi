@@ -343,6 +343,7 @@ in the following sections.
 -minline-memcpy -mno-fast-sw-div -mfast-sw-div @gol
 -mhw-mul -mno-hw-mul -mhw-mulx -mno-hw-mulx @gol
 -mno-hw-div -mhw-div @gol
+-mno-stack-check -mstack-check @gol
 -msys-crt0= -msys-lib= -msys=nosys }
 
 @emph{M680x0 Options}
@@ -5892,7 +5893,6 @@ processor.
 
 @item -msmallc
 @opindex msmallc
-
 Link with a limited version of the C library, -lsmallc. For more 
 information see the C Library Documentation.
 
@@ -5901,7 +5901,6 @@ information see the C Library Documentation.
 @itemx -mno-bypass-cache
 @opindex mno-bypass-cache
 @opindex mbypass-cache
-
 Force all load and store instructions to always bypass cache by 
 using io variants of the instructions. The default is to not
 bypass the cache.
@@ -5910,7 +5909,6 @@ bypass the cache.
 @itemx -mcache-volatile       
 @opindex mcache-volatile 
 @opindex mno-cache-volatile
-
 Volatile memory access bypass the cache using the io variants of 
 the ld and st instructions. The default is to cache volatile 
 accesses. 
@@ -5923,7 +5921,6 @@ future GCC release.
 @itemx -minline-memcpy
 @opindex mno-inline-memcpy 
 @opindex minline-memcpy
-
 Do not inline memcpy. The default is to inline when -O is on.
 
 
@@ -5931,7 +5928,6 @@ Do not inline memcpy. The default is to inline when -O is on.
 @itemx -mfast-sw-div
 @opindex mno-fast-sw-div
 @opindex mfast-sw-div
-
 Do no use table based fast divide for small numbers. The default 
 is to use the fast divide at -O3 and above.
 
@@ -5948,7 +5944,6 @@ is to use the fast divide at -O3 and above.
 @opindex mhw-mulx
 @opindex mno-hw-div
 @opindex mhw-div
-
 Enable or disable emitting @code{mul}, @code{mulx} and @code{div} family of 
 instructions by the compiler. The default is to emit @code{mul}
 and not emit @code{div} and @code{mulx}.
@@ -5956,10 +5951,16 @@ and not emit @code{div} and @code{mulx}.
 The different combinations of @code{mul} and @code{mulx} instructions 
 generate a different multilib options. 
 
+@item -mno-stack-check
+@itemx -mstack-check
+@opindex no-stack-check
+@opindex stack-check
+Enables or disables the checking for sufficient memory when 
+items are pushed onto the stack. A checked and non-checked
+version of each of the multilibs is provided.
 
 @item -msys-crt0=@var{startfile}
 @opindex msys-crt0
-
 @var{startfile} is the file name  of the startfile (crt0) to use 
 when linking. The default is crt0.o that comes with libgloss
 and is only suitable for use with the instruction set
@@ -5968,7 +5969,6 @@ simulator.
 @item -msys-lib=@var{systemlib}
 @itemx -msys-lib=nosys
 @opindex msys-lib
-
 @var{systemlib} is the library name of the library which provides
 the system calls required by the C library, e.g. @code{read}, @code{write}
 etc. The default is to use nosys, this library provides

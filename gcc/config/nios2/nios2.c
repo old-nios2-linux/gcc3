@@ -1,6 +1,6 @@
 /* Subroutines for assembler code output for Altera NIOS 2G NIOS2 version.
-   Copyright (C) 2003 Altera
-   Contributed by Jonah Graham (jgraham@altera.com).
+   Copyright (C) 2005 Altera
+   Contributed by Jonah Graham (jgraham@altera.com) and Will Reece (wreece@altera.com).
 
 This file is part of GNU CC.
 
@@ -129,11 +129,27 @@ GTY (())
 
 
 /***************************************
- * Section encodings
+ * Register Classes
  ***************************************/
 
+enum reg_class 
+reg_class_from_constraint (char chr, char *str)
+{
+  if (chr == 'D' && ISDIGIT (str[1]) && ISDIGIT (str[2]))
+    {
+      int regno;
+      int ones = str[2] - '0';
+      int tens = str[1] - '0';
+      
+      regno = ones + (10 * tens);
+      if (regno < 0 || regno > 31)
+        return NO_REGS;
 
+      return D00_REG + regno;
+    }
 
+  return NO_REGS;
+}
 
 
 /***************************************
@@ -308,6 +324,11 @@ expand_prologue ()
 	      = cfun->machine->frame.save_regs_offset
 		+ cfun->machine->frame.save_reg_rounded;
 	}
+
+      if (current_function_limit_stack)
+	{
+	  emit_insn (gen_stack_overflow_detect_and_trap ());
+	}
     }
 
   if (MUST_SAVE_REGISTER (RA_REGNO))
@@ -439,15 +460,9 @@ nios2_function_ok_for_sibcall (tree a ATTRIBUTE_UNUSED, tree b ATTRIBUTE_UNUSED)
 void
 function_profiler (FILE *file, int labelno)
 {
-  fprintf (file, "\t%s mcount begin, label: .LP%d\n", 
-           ASM_COMMENT_START, labelno);
-  fprintf (file, "\tnextpc\tr8\n");
-  fprintf (file, "\tmov\tr9, ra\n");
-  fprintf (file, "\tmovhi\tr10, %%hiadj(.LP%d)\n", labelno);
-  fprintf (file, "\taddi\tr10, r10, %%lo(.LP%d)\n", labelno);
+  fprintf (file, "\tmov\tr8, ra\n");
   fprintf (file, "\tcall\tmcount\n");
-  fprintf (file, "\tmov\tra, r9\n");
-  fprintf (file, "\t%s mcount end\n", ASM_COMMENT_START);
+  fprintf (file, "\tmov\tra, r8\n");
 }
 
 
@@ -621,6 +636,12 @@ override_options ()
       target_flags &= ~HAS_MULX_FLAG;
     }
 
+  /* Set up for stack limit checking */
+  if (TARGET_STACK_CHECK)
+    {
+      stack_limit_rtx = gen_rtx_REG(SImode, ET_REGNO);
+    }
+  
 }
 
 void

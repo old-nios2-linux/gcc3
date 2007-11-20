@@ -1,6 +1,6 @@
 ;; Machine Description for Altera NIOS 2G NIOS2 version.
-;;    Copyright (C) 2003 Altera 
-;;    Contributed by Jonah Graham (jgraham@altera.com).
+;;    Copyright (C) 2005 Altera 
+;;    Contributed by Jonah Graham (jgraham@altera.com) and Will Reece (wreece@altera.com).
 ;; 
 ;; This file is part of GNU CC.
 ;; 
@@ -27,6 +27,7 @@
 ;*
 ;*****************************************************************************
 (define_constants [
+  (ET_REGNO 24)
   (GP_REGNO 26)
   (SP_REGNO 27)
   (FP_REGNO 28)
@@ -54,7 +55,8 @@
   (UNSPEC_SYNC 9)
   (UNSPEC_WRCTL 10)
   (UNSPEC_RDCTL 11)
-  
+  (UNSPEC_TRAP 12)
+  (UNSPEC_STACK_OVERFLOW_DETECT_AND_TRAP 13)
 ])
 
 
@@ -150,8 +152,7 @@
   [(set (match_operand:QI 0 "nonimmediate_operand" "=m, r,r, r")
         (match_operand:QI 1 "general_operand"       "rM,m,rM,I"))]
   "(register_operand (operands[0], QImode)
-    || register_operand (operands[1], QImode)
-    || (GET_CODE (operands[1]) == CONST_INT && INTVAL (operands[1]) == 0))"
+    || reg_or_0_operand (operands[1], QImode))"
   "@
     stb%o0\\t%z1, %0
     ldbu%o1\\t%0, %1
@@ -177,7 +178,7 @@
 
 (define_insn "stbio"
   [(set (match_operand:SI 0 "memory_operand" "=m")
-	(match_operand:SI 1 "register_operand"   "r"))
+	(match_operand:SI 1 "reg_or_0_operand"   "rM"))
    (unspec_volatile:SI [(const_int 0)] UNSPEC_STBIO)]
   ""
   "stbio\\t%z1, %0"
@@ -197,8 +198,7 @@
   [(set (match_operand:HI 0 "nonimmediate_operand" "=m, r,r, r,r")
         (match_operand:HI 1 "general_operand"       "rM,m,rM,I,J"))]
   "(register_operand (operands[0], HImode)
-    || register_operand (operands[1], HImode)
-    || (GET_CODE (operands[1]) == CONST_INT && INTVAL (operands[1]) == 0))"
+    || reg_or_0_operand (operands[1], HImode))"
   "@
     sth%o0\\t%z1, %0
     ldhu%o1\\t%0, %1
@@ -225,7 +225,7 @@
 
 (define_insn "sthio"
   [(set (match_operand:SI 0 "memory_operand" "=m")
-	(match_operand:SI 1 "register_operand"   "r"))
+	(match_operand:SI 1 "reg_or_0_operand"   "rM"))
    (unspec_volatile:SI [(const_int 0)] UNSPEC_STHIO)]
   ""
   "sthio\\t%z1, %0"
@@ -244,8 +244,7 @@
   [(set (match_operand:SI 0 "nonimmediate_operand" "=m, r,r, r,r,r,r")
         (match_operand:SI 1 "general_operand"       "rM,m,rM,I,J,S,i"))]
   "(register_operand (operands[0], SImode)
-    || register_operand (operands[1], SImode)
-    || (GET_CODE (operands[1]) == CONST_INT && INTVAL (operands[1]) == 0))"
+    || reg_or_0_operand (operands[1], SImode))"
   "@
     stw%o0\\t%z1, %0
     ldw%o1\\t%0, %1
@@ -266,7 +265,7 @@
 
 (define_insn "stwio"
   [(set (match_operand:SI 0 "memory_operand" "=m")
-	(match_operand:SI 1 "register_operand"   "r"))
+	(match_operand:SI 1 "reg_or_0_operand"   "rM"))
    (unspec_volatile:SI [(const_int 0)] UNSPEC_STWIO)]
   ""
   "stwio\\t%z1, %0"
@@ -315,26 +314,30 @@
 ;* sign extension
 ;*
 ;*****************************************************************************
-
 (define_expand "extendhisi2"
   [(set (match_operand:SI 0 "register_operand" "")
 	(sign_extend:SI (match_operand:HI 1 "nonimmediate_operand" "")))]
   ""
 {
-  if (optimize && GET_CODE (operands[1]) == MEM)
-    operands[1] = force_not_mem (operands[1]);
-
-  if (GET_CODE (operands[1]) != MEM)
-    {
-      rtx op1   = gen_lowpart (SImode, operands[1]);
-      rtx temp  = gen_reg_rtx (SImode);
-      rtx shift = GEN_INT (16);
-
-      emit_insn (gen_ashlsi3 (temp, op1, shift));
-      emit_insn (gen_ashrsi3 (operands[0], temp, shift));
-      DONE;
-    }
 })
+
+(define_insn "*extendhisi2"
+  [(set (match_operand:SI 0 "register_operand" "=r")
+        (sign_extend:SI (match_operand:HI 1 "register_operand" "r")))]
+  ""
+  "#")
+
+(define_split
+  [(set (match_operand:SI 0 "register_operand" "")
+        (sign_extend:SI (match_operand:HI 1 "register_operand" "")))]
+  "reload_completed"
+  [(set (match_dup 0)
+        (and:SI (match_dup 1) (const_int 65535)))
+   (set (match_dup 0)
+        (xor:SI (match_dup 0) (const_int 32768)))
+   (set (match_dup 0)
+        (plus:SI (match_dup 0) (const_int -32768)))]
+  "operands[1] = gen_lowpart (SImode, operands[1]);")
 
 (define_insn "extendhisi2_internal"
   [(set (match_operand:SI 0 "register_operand" "=r")
@@ -343,26 +346,34 @@
   "ldh%o1\\t%0, %1"
   [(set_attr "type"	"ld")])
 
+
 (define_expand "extendqihi2"
   [(set (match_operand:HI 0 "register_operand" "")
 	(sign_extend:HI (match_operand:QI 1 "nonimmediate_operand" "")))]
   ""
 {
-  if (optimize && GET_CODE (operands[1]) == MEM)
-    operands[1] = force_not_mem (operands[1]);
-
-  if (GET_CODE (operands[1]) != MEM)
-    {
-      rtx op0   = gen_lowpart (SImode, operands[0]);
-      rtx op1   = gen_lowpart (SImode, operands[1]);
-      rtx temp  = gen_reg_rtx (SImode);
-      rtx shift = GEN_INT (24);
-
-      emit_insn (gen_ashlsi3 (temp, op1, shift));
-      emit_insn (gen_ashrsi3 (op0, temp, shift));
-      DONE;
-    }
 })
+
+(define_insn "*extendqihi2"
+  [(set (match_operand:HI 0 "register_operand" "=r")
+        (sign_extend:HI (match_operand:QI 1 "register_operand" "r")))]
+  ""
+  "#")
+
+(define_split
+  [(set (match_operand:HI 0 "register_operand" "")
+        (sign_extend:HI (match_operand:QI 1 "register_operand" "")))]
+  "reload_completed"
+  [(set (match_dup 0)
+        (and:SI (match_dup 1) (const_int 255)))
+   (set (match_dup 0)
+        (xor:SI (match_dup 0) (const_int 128)))
+   (set (match_dup 0)
+        (plus:SI (match_dup 0) (const_int -128)))]
+  "operands[0] = gen_lowpart (SImode, operands[0]);
+   operands[1] = gen_lowpart (SImode, operands[1]);")
+
+
 
 (define_insn "extendqihi2_internal"
   [(set (match_operand:HI 0 "register_operand" "=r")
@@ -377,20 +388,25 @@
 	(sign_extend:SI (match_operand:QI 1 "nonimmediate_operand" "")))]
   ""
 {
-  if (optimize && GET_CODE (operands[1]) == MEM)
-    operands[1] = force_not_mem (operands[1]);
-
-  if (GET_CODE (operands[1]) != MEM)
-    {
-      rtx op1   = gen_lowpart (SImode, operands[1]);
-      rtx temp  = gen_reg_rtx (SImode);
-      rtx shift = GEN_INT (24);
-
-      emit_insn (gen_ashlsi3 (temp, op1, shift));
-      emit_insn (gen_ashrsi3 (operands[0], temp, shift));
-      DONE;
-    }
 })
+
+(define_insn "*extendqisi2"
+  [(set (match_operand:SI 0 "register_operand" "=r")
+        (sign_extend:SI (match_operand:QI 1 "register_operand" "r")))]
+  ""
+  "#")
+
+(define_split
+  [(set (match_operand:SI 0 "register_operand" "")
+        (sign_extend:SI (match_operand:QI 1 "register_operand" "")))]
+  "reload_completed"
+  [(set (match_dup 0)
+        (and:SI (match_dup 1) (const_int 255)))
+   (set (match_dup 0)
+        (xor:SI (match_dup 0) (const_int 128)))
+   (set (match_dup 0)
+        (plus:SI (match_dup 0) (const_int -128)))]
+  "operands[1] = gen_lowpart (SImode, operands[1]);")
 
 (define_insn "extendqisi2_insn"
   [(set (match_operand:SI 0 "register_operand" "=r")
@@ -400,6 +416,7 @@
   [(set_attr "type"	"ld")])
 
 
+
 
 ;*****************************************************************************
 ;*
@@ -596,7 +613,12 @@
 	(ashift:SI (match_operand:SI 1 "register_operand" "r,r")
 		   (match_operand:SI 2 "shift_operand"    "r,L")))]
   ""
-  "sll%i2\\t%0, %1, %z2"
+
+{
+	if( GET_CODE ( operands[2] ) == CONST_INT && INTVAL( operands[2] ) == 1 )
+		return "add\t%0,%1,%1";
+	return "sll%i2\t%0,%1,%z2";
+}
   [(set_attr "type" "shift")])
 
 (define_insn "ashrsi3"
@@ -808,7 +830,7 @@
 )
 
 (define_insn "sibcall_insn"
- [(call (mem:QI (match_operand:SI 0 "register_operand" "r"))
+ [(call (mem:QI (match_operand:SI 0 "register_operand" "D08"))
 	(match_operand 1 "" ""))
   (return)
   (use (match_operand 2 "" ""))]
@@ -818,7 +840,7 @@
 
 (define_insn "sibcall_value_insn"
  [(set (match_operand 0 "register_operand" "")
-       (call (mem:QI (match_operand:SI 1 "register_operand" "r"))
+       (call (mem:QI (match_operand:SI 1 "register_operand" "D08"))
 	     (match_operand 2 "" "")))
   (return)
   (use (match_operand 3 "" ""))]
@@ -2062,11 +2084,23 @@
 
 (define_insn "wrctl"
   [(unspec_volatile:SI [(match_operand:SI 0 "rdwrctl_operand"  "O")
-                        (match_operand:SI 1 "register_operand" "r")] UNSPEC_WRCTL)]
+                        (match_operand:SI 1 "reg_or_0_operand" "rM")] UNSPEC_WRCTL)]
   ""
-  "wrctl\\tctl%0, %1"
+  "wrctl\\tctl%0, %z1"
   [(set_attr "type" "control")])
 
+;Used to signal a stack overflow 
+(define_insn "trap"
+  [(unspec_volatile [(const_int 0)] UNSPEC_TRAP)]
+  ""
+  "break\\t3"
+  [(set_attr "type" "control")])
+  
+(define_insn "stack_overflow_detect_and_trap"
+  [(unspec_volatile [(const_int 0)] UNSPEC_STACK_OVERFLOW_DETECT_AND_TRAP)]
+  ""
+  "bgeu\\tsp, et, 1f\;break\\t3\;1:"
+  [(set_attr "type" "control")])
 
 
 ;*****************************************************************************

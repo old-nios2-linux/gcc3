@@ -77,7 +77,7 @@ $(T)crtn.o: $(srcdir)/config/nios2/crtn.asm $(GCC_PASSES)
 ## sets of options: -m68000, -m68020, -msoft-float, -m68000 -msoft-float,
 ## and -m68020 -msoft-float.
 
-MULTILIB_OPTIONS = mno-hw-mul mhw-mulx
+MULTILIB_OPTIONS = mno-hw-mul mhw-mulx mstack-check
 
 ## MULTILIB_DIRNAMES
 ## If MULTILIB_OPTIONS is used, this variable specifies the directory names

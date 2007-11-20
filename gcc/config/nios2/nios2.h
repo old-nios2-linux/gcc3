@@ -1,6 +1,6 @@
 /* Definitions of target machine for Altera NIOS 2G NIOS2 version.
-   Copyright (C) 2003 Altera 
-   Contributed by Jonah Graham (jgraham@altera.com).
+   Copyright (C) 2005 Altera 
+   Contributed by Jonah Graham (jgraham@altera.com) and Will Reece (wreece@altera.com).
 
 This file is part of GNU CC.
 
@@ -26,7 +26,6 @@ Boston, MA 02111-1307, USA.  */
     {						\
       builtin_define_std ("NIOS2");		\
       builtin_define_std ("nios2");		\
-      builtin_define ("_GNU_SOURCE");		\
     }						\
   while (0)
 #define TARGET_VERSION fprintf (stderr, " (Altera Nios II)")
@@ -46,6 +45,7 @@ Boston, MA 02111-1307, USA.  */
 #define INLINE_MEMCPY_FLAG 0x00010
 #define CACHE_VOLATILE_FLAG 0x0020
 #define BYPASS_CACHE_FLAG 0x0040
+#define STACK_CHECK_FLAG 0x0080 
 
 extern int target_flags;
 #define TARGET_HAS_DIV (target_flags & HAS_DIV_FLAG)
@@ -55,6 +55,7 @@ extern int target_flags;
 #define TARGET_INLINE_MEMCPY (target_flags & INLINE_MEMCPY_FLAG)
 #define TARGET_CACHE_VOLATILE (target_flags & CACHE_VOLATILE_FLAG)
 #define TARGET_BYPASS_CACHE (target_flags & BYPASS_CACHE_FLAG)
+#define TARGET_STACK_CHECK (target_flags & STACK_CHECK_FLAG)
 
 #define TARGET_SWITCHES					\
 {							\
@@ -90,9 +91,12 @@ extern int target_flags;
       N_("Link with a limited version of the C library") },		\
     { "ctors-in-init", 0,			\
       "" /* undocumented: N_("Link with static constructors and destructors in init") */ },		\
+    { "stack-check", STACK_CHECK_FLAG,				\
+      N_("Enable stack limit checking.") },				\
+    { "no-stack-check", -STACK_CHECK_FLAG,				\
+      N_("Disable stack limit checking (default).") },				\
     { "", TARGET_DEFAULT, 0 }				\
 }
-
 
 extern const char *nios2_sys_nosys_string;    /* for -msys=nosys */
 extern const char *nios2_sys_lib_string;    /* for -msys-lib= */
@@ -130,7 +134,7 @@ extern const char *nios2_sys_crt0_string;    /* for -msys-crt0= */
 #define LIB_SPEC \
 "--start-group %{msmallc: -lsmallc} %{!msmallc: -lc} -lgcc \
  %{msys-lib=*: -l%*} \
- %{!msys-lib=*: -lc } \
+ %{!msys-lib=*: -lnosys -lstack} \
  --end-group \
  %{msys-lib=: %eYou need a library name for -msys-lib=} \
 "
@@ -138,7 +142,7 @@ extern const char *nios2_sys_crt0_string;    /* for -msys-crt0= */
 
 #undef STARTFILE_SPEC 
 #define STARTFILE_SPEC  \
-"%{msys-crt0=*: %*} %{!msys-crt0=*: crt1%O%s} \
+"%{msys-crt0=*: %*} %{!msys-crt0=*: crt0%O%s} \
  %{msys-crt0=: %eYou need a C startup file for -msys-crt0=} \
  %{mctors-in-init: crti%O%s crtbegin%O%s} \
 "
@@ -225,8 +229,8 @@ Register Number
 23    r23 sc    Static Chain (Callee Saved)
                 ??? Does $sc want to be caller or callee 
                 saved. If caller, 15, else 23. 
-24    r24       Exception Temporary
-25    r25       Breakpoint Temporary
+24    r24 et    Exception Temporary
+25    r25 bt    Breakpoint Temporary
 26    r26 gp    Global Pointer
 27    r27 sp    Stack Pointer
 28    r28 fp    Frame Pointer
@@ -303,6 +307,39 @@ are located in nios2.md.
 enum reg_class
 {
     NO_REGS,
+    D00_REG,
+    D01_REG,
+    D02_REG,
+    D03_REG,
+    D04_REG,
+    D05_REG,
+    D06_REG,
+    D07_REG,
+    D08_REG,
+    D09_REG,
+    D10_REG,
+    D11_REG,
+    D12_REG,
+    D13_REG,
+    D14_REG,
+    D15_REG,
+    D16_REG,
+    D17_REG,
+    D18_REG,
+    D19_REG,
+    D20_REG,
+    D21_REG,
+    D22_REG,
+    D23_REG,
+    D24_REG,
+    D25_REG,
+    D26_REG,
+    D27_REG,
+    D28_REG,
+    D29_REG,
+    D30_REG,
+    D31_REG,
+    GP_REGS,
     ALL_REGS,
     LIM_REG_CLASSES
 };
@@ -311,21 +348,89 @@ enum reg_class
 
 #define REG_CLASS_NAMES   \
     {"NO_REGS",           \
+     "D00_REG",           \
+     "D01_REG",           \
+     "D02_REG",           \
+     "D03_REG",           \
+     "D04_REG",           \
+     "D05_REG",           \
+     "D06_REG",           \
+     "D07_REG",           \
+     "D08_REG",           \
+     "D09_REG",           \
+     "D10_REG",           \
+     "D11_REG",           \
+     "D12_REG",           \
+     "D13_REG",           \
+     "D14_REG",           \
+     "D15_REG",           \
+     "D16_REG",           \
+     "D17_REG",           \
+     "D18_REG",           \
+     "D19_REG",           \
+     "D20_REG",           \
+     "D21_REG",           \
+     "D22_REG",           \
+     "D23_REG",           \
+     "D24_REG",           \
+     "D25_REG",           \
+     "D26_REG",           \
+     "D27_REG",           \
+     "D28_REG",           \
+     "D29_REG",           \
+     "D30_REG",           \
+     "D31_REG",           \
+     "GP_REGS",           \
      "ALL_REGS"}
 
 #define GENERAL_REGS ALL_REGS
 
 #define REG_CLASS_CONTENTS   \
 /* NO_REGS  */       {{ 0, 0},     \
+/* D00_REG  */        { 1 << 0, 0},    \
+/* D01_REG  */        { 1 << 1, 0},    \
+/* D02_REG  */        { 1 << 2, 0},    \
+/* D03_REG  */        { 1 << 3, 0},    \
+/* D04_REG  */        { 1 << 4, 0},    \
+/* D05_REG  */        { 1 << 5, 0},    \
+/* D06_REG  */        { 1 << 6, 0},    \
+/* D07_REG  */        { 1 << 7, 0},    \
+/* D08_REG  */        { 1 << 8, 0},    \
+/* D09_REG  */        { 1 << 9, 0},    \
+/* D10_REG  */        { 1 << 10, 0},    \
+/* D11_REG  */        { 1 << 11, 0},    \
+/* D12_REG  */        { 1 << 12, 0},    \
+/* D13_REG  */        { 1 << 13, 0},    \
+/* D14_REG  */        { 1 << 14, 0},    \
+/* D15_REG  */        { 1 << 15, 0},    \
+/* D16_REG  */        { 1 << 16, 0},    \
+/* D17_REG  */        { 1 << 17, 0},    \
+/* D18_REG  */        { 1 << 18, 0},    \
+/* D19_REG  */        { 1 << 19, 0},    \
+/* D20_REG  */        { 1 << 20, 0},    \
+/* D21_REG  */        { 1 << 21, 0},    \
+/* D22_REG  */        { 1 << 22, 0},    \
+/* D23_REG  */        { 1 << 23, 0},    \
+/* D24_REG  */        { 1 << 24, 0},    \
+/* D25_REG  */        { 1 << 25, 0},    \
+/* D26_REG  */        { 1 << 26, 0},    \
+/* D27_REG  */        { 1 << 27, 0},    \
+/* D28_REG  */        { 1 << 28, 0},    \
+/* D29_REG  */        { 1 << 29, 0},    \
+/* D30_REG  */        { 1 << 30, 0},    \
+/* D31_REG  */        { 1 << 31, 0},    \
+/* GP_REGS  */        {~0, 0},    \
 /* ALL_REGS */        {~0,~0}}    \
 
-#define REGNO_REG_CLASS(REGNO) ALL_REGS
+#define REGNO_REG_CLASS(REGNO) ((REGNO) <= 31 ? GP_REGS : ALL_REGS) 
 
 #define BASE_REG_CLASS ALL_REGS
 #define INDEX_REG_CLASS ALL_REGS
 
-/* only one reg class, 'r', is handled automatically */
-#define REG_CLASS_FROM_LETTER(CHAR) NO_REGS
+/* 'r', is handled automatically */
+#define  REG_CLASS_FROM_CONSTRAINT(CHAR, STR) \
+  reg_class_from_constraint ((CHAR), (STR))
+  
 
 #define REGNO_OK_FOR_BASE_P2(REGNO, STRICT) \
     ((STRICT) \
@@ -378,6 +483,9 @@ enum reg_class
 
 #define PREFERRED_RELOAD_CLASS(X, CLASS) \
     ((CLASS) == NO_REGS ? GENERAL_REGS : (CLASS))
+
+#define CONSTRAINT_LEN(C, STR) \
+ ((C) == 'D' ? 3 : DEFAULT_CONSTRAINT_LEN ((C), (STR)))
 
 /* 'S' matches immediates which are in small data 
    and therefore can be added to gp to create a 
@@ -520,8 +628,9 @@ typedef struct nios2_args
  * Generating Code for Profiling
  * ----------------------------- */
 
-#define PROFILE_BEFORE_PROLOGUE
 
+#define PROFILE_BEFORE_PROLOGUE
+#define NO_PROFILE_COUNTERS 1
 #define FUNCTION_PROFILER(FILE, LABELNO) \
   function_profiler ((FILE), (LABELNO))
 
@@ -694,8 +803,8 @@ typedef struct nios2_args
     "r21", \
     "r22", \
     "r23", \
-    "r24", \
-    "r25", \
+    "et", \
+    "bt", \
     "gp", \
     "sp", \
     "fp", \
@@ -712,6 +821,21 @@ typedef struct nios2_args
     "fake_fp", \
     "fake_ap", \
 }
+
+#define ADDITIONAL_REGISTER_NAMES	\
+{					\
+  {"r0", 0},				\
+  {"r1", 1},				\
+  {"r24", 24},				\
+  {"r25", 25},				\
+  {"r26", 26},				\
+  {"r27", 27},				\
+  {"r28", 28},				\
+  {"r29", 29},				\
+  {"r30", 30},				\
+  {"r31", 31}				\
+}
+
 
 #define ASM_OUTPUT_OPCODE(STREAM, PTR)\
    (PTR) = asm_output_opcode (STREAM, PTR)
