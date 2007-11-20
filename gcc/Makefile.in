@@ -3067,7 +3067,7 @@ install-mkheaders: stmp-int-hdrs $(STMP_FIXPROTO) install-include-dir \
 	  $(INSTALL_DATA) $(srcdir)/README-fixinc \
 	    $(DESTDIR)$(itoolsdatadir)/include/README ; \
 	  $(INSTALL_SCRIPT) fixinc.sh $(DESTDIR)$(itoolsdir)/fixinc.sh ; \
-	  $(INSTALL_PROGRAM) fixinc/fixincl$(build_exeext) $(DESTDIR)$(itoolsdir)/fixincl$(build_exeext) ; \
+	  $(INSTALL_PROGRAM) fixinc/fixincl $(DESTDIR)$(itoolsdir)/fixincl ; \
 	  $(INSTALL_DATA) $(srcdir)/gsyslimits.h \
 	    $(DESTDIR)$(itoolsdatadir)/gsyslimits.h ; \
 	else :; fi
