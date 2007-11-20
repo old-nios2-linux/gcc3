@@ -26,6 +26,10 @@ Boston, MA 02111-1307, USA.  */
     {						\
       builtin_define_std ("NIOS2");		\
       builtin_define_std ("nios2");		\
+      if (TARGET_BIG_ENDIAN)                        \
+        builtin_define_std ("nios2_big_endian");    \
+      else                                          \
+        builtin_define_std ("nios2_little_endian"); \
     }						\
   while (0)
 #define TARGET_VERSION fprintf (stderr, " (Altera Nios II)")
@@ -47,6 +51,8 @@ Boston, MA 02111-1307, USA.  */
 #define BYPASS_CACHE_FLAG 0x0040
 #define STACK_CHECK_FLAG 0x0080 
 #define REVERSE_BITFIELDS_FLAG 0x0100
+/* Reserve 0x0200 for REVERSE_ENDIAN_FLAG */
+#define BIG_ENDIAN_FLAG 0x0400
 
 extern int target_flags;
 #define TARGET_HAS_DIV (target_flags & HAS_DIV_FLAG)
@@ -58,6 +64,7 @@ extern int target_flags;
 #define TARGET_BYPASS_CACHE (target_flags & BYPASS_CACHE_FLAG)
 #define TARGET_STACK_CHECK (target_flags & STACK_CHECK_FLAG)
 #define TARGET_REVERSE_BITFIELDS (target_flags & REVERSE_BITFIELDS_FLAG)
+#define TARGET_BIG_ENDIAN (target_flags & BIG_ENDIAN_FLAG)
 
 #define TARGET_SWITCHES					\
 {							\
@@ -101,12 +108,139 @@ extern int target_flags;
       N_("Reverse the order of bitfields in a struct.") },      \
     { "no-reverse-bitfields", -REVERSE_BITFIELDS_FLAG,          \
       N_("Use the normal order of bitfields in a struct (default).") }, \
+    { "eb", BIG_ENDIAN_FLAG,                                            \
+      N_("Use big-endian byte order") },                                \
+    { "el", -BIG_ENDIAN_FLAG,                                           \
+      N_("Use little-endian byte order") },                             \
     { "", TARGET_DEFAULT, 0 }				\
 }
 
 extern const char *nios2_sys_nosys_string;    /* for -msys=nosys */
 extern const char *nios2_sys_lib_string;    /* for -msys-lib= */
 extern const char *nios2_sys_crt0_string;    /* for -msys-crt0= */
+
+/*
+ * There's a lot of error-prone tedium with all the different
+ * custom floating point instructions.  Try to automate it a bit
+ * to make it easier to deal with.
+ */
+#define NIOS2_STRINGIFY_INNER(x) #x
+#define NIOS2_STRINGIFY(x) NIOS2_STRINGIFY_INNER(x)
+#define NIOS2_CONCAT_INNER(x, y) x ## y
+#define NIOS2_CONCAT(x, y) NIOS2_CONCAT_INNER (x, y)
+
+#define NIOS2_FOR_ALL_FPU_INSNS \
+  NIOS2_FPU_INSN (fwrx,     nios2_fwrx,    zdz) \
+  NIOS2_FPU_INSN (fwry,     nios2_fwry,    zsz) \
+  NIOS2_FPU_INSN (frdxlo,   nios2_frdxlo,  szz) \
+  NIOS2_FPU_INSN (frdxhi,   nios2_frdxhi,  szz) \
+  NIOS2_FPU_INSN (frdy,     nios2_frdy,    szz) \
+\
+  NIOS2_FPU_INSN (fadds,    addsf3,        sss) \
+  NIOS2_FPU_INSN (fsubs,    subsf3,        sss) \
+  NIOS2_FPU_INSN (fmuls,    mulsf3,        sss) \
+  NIOS2_FPU_INSN (fdivs,    divsf3,        sss) \
+  NIOS2_FPU_INSN (fmins,    minsf3,        sss) \
+  NIOS2_FPU_INSN (fmaxs,    maxsf3,        sss) \
+  NIOS2_FPU_INSN (fnegs,    negsf2,        ssz) \
+  NIOS2_FPU_INSN (fabss,    abssf2,        ssz) \
+  NIOS2_FPU_INSN (fsqrts,   sqrtsf2,       ssz) \
+  NIOS2_FPU_INSN (fcoss,    cossf2,        ssz) \
+  NIOS2_FPU_INSN (fsins,    sinsf2,        ssz) \
+  NIOS2_FPU_INSN (ftans,    tansf2,        ssz) \
+  NIOS2_FPU_INSN (fatans,   atansf2,       ssz) \
+  NIOS2_FPU_INSN (fexps,    expsf2,        ssz) \
+  NIOS2_FPU_INSN (flogs,    logsf2,        ssz) \
+  NIOS2_FPU_INSN (fcmplts,  nios2_sltsf,   iss) \
+  NIOS2_FPU_INSN (fcmples,  nios2_slesf,   iss) \
+  NIOS2_FPU_INSN (fcmpgts,  nios2_sgtsf,   iss) \
+  NIOS2_FPU_INSN (fcmpges,  nios2_sgesf,   iss) \
+  NIOS2_FPU_INSN (fcmpeqs,  nios2_seqsf,   iss) \
+  NIOS2_FPU_INSN (fcmpnes,  nios2_snesf,   iss) \
+\
+  NIOS2_FPU_INSN (faddd,    adddf3,        ddd) \
+  NIOS2_FPU_INSN (fsubd,    subdf3,        ddd) \
+  NIOS2_FPU_INSN (fmuld,    muldf3,        ddd) \
+  NIOS2_FPU_INSN (fdivd,    divdf3,        ddd) \
+  NIOS2_FPU_INSN (fmind,    mindf3,        ddd) \
+  NIOS2_FPU_INSN (fmaxd,    maxdf3,        ddd) \
+  NIOS2_FPU_INSN (fnegd,    negdf2,        ddz) \
+  NIOS2_FPU_INSN (fabsd,    absdf2,        ddz) \
+  NIOS2_FPU_INSN (fsqrtd,   sqrtdf2,       ddz) \
+  NIOS2_FPU_INSN (fcosd,    cosdf2,        ddz) \
+  NIOS2_FPU_INSN (fsind,    sindf2,        ddz) \
+  NIOS2_FPU_INSN (ftand,    tandf2,        ddz) \
+  NIOS2_FPU_INSN (fatand,   atandf2,       ddz) \
+  NIOS2_FPU_INSN (fexpd,    expdf2,        ddz) \
+  NIOS2_FPU_INSN (flogd,    logdf2,        ddz) \
+  NIOS2_FPU_INSN (fcmpltd,  nios2_sltdf,   idd) \
+  NIOS2_FPU_INSN (fcmpled,  nios2_sledf,   idd) \
+  NIOS2_FPU_INSN (fcmpgtd,  nios2_sgtdf,   idd) \
+  NIOS2_FPU_INSN (fcmpged,  nios2_sgedf,   idd) \
+  NIOS2_FPU_INSN (fcmpeqd,  nios2_seqdf,   idd) \
+  NIOS2_FPU_INSN (fcmpned,  nios2_snedf,   idd) \
+\
+  NIOS2_FPU_INSN (floatis,  floatsisf2,    siz) \
+  NIOS2_FPU_INSN (floatus,  floatunssisf2, suz) \
+  NIOS2_FPU_INSN (floatid,  floatsidf2,    diz) \
+  NIOS2_FPU_INSN (floatud,  floatunssidf2, duz) \
+  NIOS2_FPU_INSN (fixsi,    fixsfsi2,      isz) \
+  NIOS2_FPU_INSN (fixsu,    fixunssfsi2,   usz) \
+  NIOS2_FPU_INSN (fixdi,    fixdfsi2,      idz) \
+  NIOS2_FPU_INSN (fixdu,    fixunsdfsi2,   udz) \
+  NIOS2_FPU_INSN (fextsd,   extendsfdf2,   dsz) \
+  NIOS2_FPU_INSN (ftruncds, truncdfsf2,    sdz)
+
+enum
+{
+#define NIOS2_FPU_INSN(opt, insn, args) \
+  NIOS2_CONCAT (nios2_fpu_, insn),
+NIOS2_FOR_ALL_FPU_INSNS
+  nios2_fpu_max_insn
+};
+
+struct cpp_reader;
+typedef const char * (*nios2_outputfn) (rtx);
+typedef void (*nios2_pragmafn) (struct cpp_reader *);
+
+typedef struct
+{
+  const char *option;      /* name of switch, e.g. fadds */
+  const char *insnnm;      /* name of gcc insn, e.g. addsf3 */
+  const char *args;        /* args to gcc insn, e.g. sss */
+  const char *value;       /* value of switch as a string */
+  int N;                   /* value of switch as an integer, -1 = not used */
+  nios2_outputfn output;   /* output function for use in .md file */
+  const char *pname;       /* name of corresponding #pragma custom- */
+  nios2_pragmafn pragma;   /* pragma function for register_target_pragmas */
+  const char *nopname;     /* name of corresponding #pragma no-custom- */
+  nios2_pragmafn nopragma; /* pragma function for register_target_pragmas */
+  int is_double;           /* does this insn have any double operands */
+  int needed_by_double;    /* is this insn needed if doubles are used? */
+  int needs_unsafe;        /* does this insn require
+                              -funsafe-math-optimizations to work? */
+  int needs_finite;        /* does this insn require
+                              -ffinite-math-only to work? */
+  int pragma_seen;         /* have we seen the corresponding #pragma? */
+} nios2_fpu_info;
+
+extern nios2_fpu_info nios2_fpu_insns[nios2_fpu_max_insn];
+extern const char *nios2_custom_fpu_cfg_string;
+
+#undef NIOS2_FPU_INSN
+#define NIOS2_FPU_INSN(opt, insn, args) \
+  { \
+    "custom-" NIOS2_STRINGIFY (opt) "=", \
+    &(nios2_fpu_insns[NIOS2_CONCAT (nios2_fpu_, insn)].value), \
+    N_("Integer id (N) of " NIOS2_STRINGIFY (opt) " custom instruction"), \
+    0 \
+  }, \
+  { \
+    "no-custom-" NIOS2_STRINGIFY (opt), \
+    &(nios2_fpu_insns[NIOS2_CONCAT (nios2_fpu_, insn)].value), \
+    N_("Do not use the " NIOS2_STRINGIFY (opt) " custom instruction"), \
+    "-1" \
+  },
 
 #define TARGET_OPTIONS					\
 {							\
@@ -116,12 +250,19 @@ extern const char *nios2_sys_crt0_string;    /* for -msys-crt0= */
       N_("Name of System Library to link against. (Converted to a -l option)"), 0},	\
   { "sys-crt0=",    &nios2_sys_crt0_string,		\
       N_("Name of the startfile. (default is a crt0 for the ISS only)"), 0},	\
+  NIOS2_FOR_ALL_FPU_INSNS \
+  { "custom-fpu-cfg=", &nios2_custom_fpu_cfg_string,    \
+      N_("Floating point custom instruction configuration name"), 0 },  \
 }
 
+/* We're little endian, unless otherwise specified by including big.h */
+#ifndef TARGET_ENDIAN_DEFAULT
+# define TARGET_ENDIAN_DEFAULT 0
+#endif
 
 /* Default target_flags if no switches specified.  */
 #ifndef TARGET_DEFAULT
-# define TARGET_DEFAULT (HAS_MUL_FLAG | CACHE_VOLATILE_FLAG)
+# define TARGET_DEFAULT (HAS_MUL_FLAG | CACHE_VOLATILE_FLAG | TARGET_ENDIAN_DEFAULT)
 #endif
 
 /* Switch  Recognition by gcc.c.  Add -G xx support */
@@ -134,7 +275,21 @@ extern const char *nios2_sys_crt0_string;    /* for -msys-crt0= */
 #define CAN_DEBUG_WITHOUT_FP
  
 #define CC1_SPEC "\
-%{G*}"
+%{G*} %{EB:-meb} %{EL:-mel} %{EB:%{EL:%emay not use both -EB and -EL}}"
+
+#if TARGET_ENDIAN_DEFAULT == 0
+# define ASM_SPEC "\
+%{!EB:%{!meb:-EL}} %{EB|meb:-EB}"
+# define LINK_SPEC "\
+%{!EB:%{!meb:-EL}} %{EB|meb:-EB}"
+# define MULTILIB_DEFAULTS { "EL" }
+#else
+# define ASM_SPEC "\
+%{!EL:%{!mel:-EB}} %{EL|mel:-EL}"
+# define LINK_SPEC "\
+%{!EL:%{!mel:-EB}} %{EL|mel:-EL}"
+# define MULTILIB_DEFAULTS { "EB" }
+#endif
 
 #undef LIB_SPEC
 #define LIB_SPEC \
@@ -164,8 +319,13 @@ extern const char *nios2_sys_crt0_string;    /* for -msys-crt0= */
 
 #define DEFAULT_SIGNED_CHAR 1
 #define BITS_BIG_ENDIAN 0
-#define BYTES_BIG_ENDIAN 0
-#define WORDS_BIG_ENDIAN 0
+#define BYTES_BIG_ENDIAN (TARGET_BIG_ENDIAN != 0)
+#define WORDS_BIG_ENDIAN (TARGET_BIG_ENDIAN != 0)
+#if defined(__nios2_big_endian__)
+#define LIBGCC2_WORDS_BIG_ENDIAN 1
+#else
+#define LIBGCC2_WORDS_BIG_ENDIAN 0
+#endif
 #define BITS_PER_UNIT 8
 #define BITS_PER_WORD 32
 #define UNITS_PER_WORD 4
@@ -201,7 +361,8 @@ extern const char *nios2_sys_crt0_string;    /* for -msys-crt0= */
  ************************/
 
 /* comparison type */
-/* ??? currently only CMP_SI is used */
+/* ??? Currently CMP_DI is unused.  CMP_SF and CMP_DF are only used if
+   the corresponding -mcustom-<opcode> switches are present. */
 enum cmp_type {
   CMP_SI,				/* compare four byte integers */
   CMP_DI,				/* compare eight byte integers */
@@ -278,7 +439,7 @@ are located in nios2.md.
 /*  10 */  0, 0, 0, 0, 0, 0, 0, 0, 0, 0,     \
 /*  20 */  0, 0, 0, 0, 1, 1, 1, 1, 0, 1,     \
 /*  30 */  1, 0, 1, 1, 1, 1, 1, 1, 1, 1,     \
-/*  40 */  1,                                \
+/*  40 */  1                                 \
     }
 
 /* call used is the same as caller saved
@@ -290,7 +451,7 @@ are located in nios2.md.
 /*  10 */  1, 1, 1, 1, 1, 1, 0, 0, 0, 0,     \
 /*  20 */  0, 0, 0, 0, 1, 1, 1, 1, 0, 1,     \
 /*  30 */  1, 0, 1, 1, 1, 1, 1, 1, 1, 1,     \
-/*  40 */  1,                                \
+/*  40 */  1                                 \
     }
 
 #define HARD_REGNO_NREGS(REGNO, MODE)            \
@@ -600,6 +761,9 @@ enum reg_class
 #define FUNCTION_ARG(CUM, MODE, TYPE, NAMED) \
   (function_arg (&CUM, MODE, TYPE, NAMED))
 
+#define MUST_PASS_IN_STACK(MODE, TYPE) \
+  nios2_must_pass_in_stack ((MODE), (TYPE))
+
 #define FUNCTION_ARG_PARTIAL_NREGS(CUM, MODE, TYPE, NAMED) \
   (function_arg_partial_nregs (&CUM, MODE, TYPE, NAMED))
 
@@ -618,6 +782,15 @@ typedef struct nios2_args
 
 #define FUNCTION_ARG_ADVANCE(CUM, MODE, TYPE, NAMED) \
     (function_arg_advance (&CUM, MODE, TYPE, NAMED))
+
+#define FUNCTION_ARG_PADDING(MODE, TYPE) \
+  (nios2_function_arg_padding_upward ((MODE), (TYPE)) ? upward : downward)
+
+#define PAD_VARARGS_DOWN \
+  (FUNCTION_ARG_PADDING (TYPE_MODE (type), type) == downward)
+
+#define BLOCK_REG_PADDING(MODE, TYPE, FIRST) \
+  (nios2_block_reg_padding_upward ((MODE), (TYPE), (FIRST)) ? upward : downward)
 
 #define FUNCTION_ARG_REGNO_P(REGNO) \
     ((REGNO) >= FIRST_ARG_REGNO && (REGNO) <= LAST_ARG_REGNO)
@@ -942,6 +1115,7 @@ do {									\
 
 #define MOVE_MAX 4
 
+#define STORE_FLAG_VALUE 1
 #define Pmode SImode
 #define FUNCTION_MODE QImode
 

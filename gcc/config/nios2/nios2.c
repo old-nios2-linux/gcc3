@@ -48,6 +48,7 @@ Boston, MA 02111-1307, USA.  */
 #include "target.h"
 #include "target-def.h"
 #include "c-pragma.h"           /* for c_register_pragma */
+#include "cpplib.h"             /* for CPP_NUMBER */
 
 /* local prototypes */
 static bool nios2_rtx_costs (rtx, int, int, int *);
@@ -121,9 +122,8 @@ const struct attribute_spec nios2_attribute_table[] =
 #undef  TARGET_INSERT_ATTRIBUTES
 #define TARGET_INSERT_ATTRIBUTES nios2_insert_attributes
 
-
-
-
+/* ??? Might want to redefine TARGET_RETURN_IN_MSB here to handle
+   big-endian case; depends on what ABI we choose. */
 
 struct gcc_target targetm = TARGET_INITIALIZER;
 
@@ -166,7 +166,7 @@ GTY (())
  ***************************************/
 
 enum reg_class 
-reg_class_from_constraint (char chr, char *str)
+reg_class_from_constraint (char chr, const char *str)
 {
   if (chr == 'D' && ISDIGIT (str[1]) && ISDIGIT (str[2]))
     {
@@ -292,7 +292,7 @@ expand_prologue ()
 {
   int i;
   HOST_WIDE_INT total_frame_size;
-  int cfa_store_offset;
+  int cfa_store_offset = 0;
   rtx insn;
   rtx cfa_store_reg = 0;
 
@@ -491,7 +491,7 @@ nios2_function_ok_for_sibcall (tree a ATTRIBUTE_UNUSED, tree b ATTRIBUTE_UNUSED)
  * ----------------------- */
 
 void
-function_profiler (FILE *file, int labelno)
+function_profiler (FILE *file, int labelno ATTRIBUTE_UNUSED)
 {
   fprintf (file, "\tmov\tr8, ra\n");
   fprintf (file, "\tcall\tmcount\n");
@@ -645,13 +645,475 @@ nios2_can_use_return_insn ()
  *
  ***************************************/
 
+/*
+ * Try to take a bit of tedium out of the __builtin_custom_<blah>
+ * builtin functions, too.
+ */
+
+#define NIOS2_FOR_ALL_CUSTOM_BUILTINS \
+  NIOS2_DO_BUILTIN (N,    n,    n    ) \
+  NIOS2_DO_BUILTIN (NI,   ni,   nX   ) \
+  NIOS2_DO_BUILTIN (NF,   nf,   nX   ) \
+  NIOS2_DO_BUILTIN (NP,   np,   nX   ) \
+  NIOS2_DO_BUILTIN (NII,  nii,  nXX  ) \
+  NIOS2_DO_BUILTIN (NIF,  nif,  nXX  ) \
+  NIOS2_DO_BUILTIN (NIP,  nip,  nXX  ) \
+  NIOS2_DO_BUILTIN (NFI,  nfi,  nXX  ) \
+  NIOS2_DO_BUILTIN (NFF,  nff,  nXX  ) \
+  NIOS2_DO_BUILTIN (NFP,  nfp,  nXX  ) \
+  NIOS2_DO_BUILTIN (NPI,  npi,  nXX  ) \
+  NIOS2_DO_BUILTIN (NPF,  npf,  nXX  ) \
+  NIOS2_DO_BUILTIN (NPP,  npp,  nXX  ) \
+  NIOS2_DO_BUILTIN (IN,   in,   Xn   ) \
+  NIOS2_DO_BUILTIN (INI,  ini,  XnX  ) \
+  NIOS2_DO_BUILTIN (INF,  inf,  XnX  ) \
+  NIOS2_DO_BUILTIN (INP,  inp,  XnX  ) \
+  NIOS2_DO_BUILTIN (INII, inii, XnXX ) \
+  NIOS2_DO_BUILTIN (INIF, inif, XnXX ) \
+  NIOS2_DO_BUILTIN (INIP, inip, XnXX ) \
+  NIOS2_DO_BUILTIN (INFI, infi, XnXX ) \
+  NIOS2_DO_BUILTIN (INFF, inff, XnXX ) \
+  NIOS2_DO_BUILTIN (INFP, infp, XnXX ) \
+  NIOS2_DO_BUILTIN (INPI, inpi, XnXX ) \
+  NIOS2_DO_BUILTIN (INPF, inpf, XnXX ) \
+  NIOS2_DO_BUILTIN (INPP, inpp, XnXX ) \
+  NIOS2_DO_BUILTIN (FN,   fn,   Xn   ) \
+  NIOS2_DO_BUILTIN (FNI,  fni,  XnX  ) \
+  NIOS2_DO_BUILTIN (FNF,  fnf,  XnX  ) \
+  NIOS2_DO_BUILTIN (FNP,  fnp,  XnX  ) \
+  NIOS2_DO_BUILTIN (FNII, fnii, XnXX ) \
+  NIOS2_DO_BUILTIN (FNIF, fnif, XnXX ) \
+  NIOS2_DO_BUILTIN (FNIP, fnip, XnXX ) \
+  NIOS2_DO_BUILTIN (FNFI, fnfi, XnXX ) \
+  NIOS2_DO_BUILTIN (FNFF, fnff, XnXX ) \
+  NIOS2_DO_BUILTIN (FNFP, fnfp, XnXX ) \
+  NIOS2_DO_BUILTIN (FNPI, fnpi, XnXX ) \
+  NIOS2_DO_BUILTIN (FNPF, fnpf, XnXX ) \
+  NIOS2_DO_BUILTIN (FNPP, fnpp, XnXX ) \
+  NIOS2_DO_BUILTIN (PN,   pn,   Xn   ) \
+  NIOS2_DO_BUILTIN (PNI,  pni,  XnX  ) \
+  NIOS2_DO_BUILTIN (PNF,  pnf,  XnX  ) \
+  NIOS2_DO_BUILTIN (PNP,  pnp,  XnX  ) \
+  NIOS2_DO_BUILTIN (PNII, pnii, XnXX ) \
+  NIOS2_DO_BUILTIN (PNIF, pnif, XnXX ) \
+  NIOS2_DO_BUILTIN (PNIP, pnip, XnXX ) \
+  NIOS2_DO_BUILTIN (PNFI, pnfi, XnXX ) \
+  NIOS2_DO_BUILTIN (PNFF, pnff, XnXX ) \
+  NIOS2_DO_BUILTIN (PNFP, pnfp, XnXX ) \
+  NIOS2_DO_BUILTIN (PNPI, pnpi, XnXX ) \
+  NIOS2_DO_BUILTIN (PNPF, pnpf, XnXX ) \
+  NIOS2_DO_BUILTIN (PNPP, pnpp, XnXX )
+
 const char *nios2_sys_nosys_string;    /* for -msys=nosys */
 const char *nios2_sys_lib_string;    /* for -msys-lib= */
 const char *nios2_sys_crt0_string;    /* for -msys-crt0= */
 
+#undef NIOS2_FPU_INSN
+#define NIOS2_FPU_INSN(opt, insn, args) \
+static const char *NIOS2_CONCAT (nios2_output_fpu_insn_, insn) (rtx); \
+static void NIOS2_CONCAT (nios2_pragma_, insn) (struct cpp_reader *); \
+static void NIOS2_CONCAT (nios2_pragma_no_, insn) (struct cpp_reader *);
+NIOS2_FOR_ALL_FPU_INSNS
+
+nios2_fpu_info nios2_fpu_insns[nios2_fpu_max_insn] = {
+#undef NIOS2_FPU_INSN
+#define NIOS2_FPU_INSN(opt, insn, args) \
+  { NIOS2_STRINGIFY (opt), \
+    NIOS2_STRINGIFY (insn), \
+    NIOS2_STRINGIFY (args), \
+    0, \
+    -1, \
+    NIOS2_CONCAT (nios2_output_fpu_insn_, insn), \
+    "custom_" NIOS2_STRINGIFY (opt), \
+    NIOS2_CONCAT (nios2_pragma_, insn), \
+    "no_custom_" NIOS2_STRINGIFY (opt), \
+    NIOS2_CONCAT (nios2_pragma_no_, insn), \
+    0, \
+    0, \
+    0, \
+    0, \
+    0 },
+  NIOS2_FOR_ALL_FPU_INSNS
+};
+
+const char *nios2_custom_fpu_cfg_string;
+
+static const char *builtin_custom_seen[256];
+
+static void
+nios2_custom_switch (const char *parameter, int *value, const char *opt)
+{
+  /*
+   * We only document values from 0-255, but we secretly allow -1 so
+   * that the -mno-custom-<opt> switches work.
+   */
+  if (parameter && *parameter)
+    {
+      char *endptr;
+      long v = strtol (parameter, &endptr, 0);
+      if (*endptr)
+        {
+          error ("switch `-mcustom-%s' value `%s' must be a number between 0 and 255",
+                 opt, parameter);
+        }
+      if (v < -1 || v > 255)
+        {
+          error ("switch `-mcustom-%s' value %ld must be between 0 and 255",
+                 opt, v);
+        }
+      *value = (int)v;
+    }
+}
+
+static void
+nios2_custom_check_insns (int is_pragma)
+{
+  int i;
+  int has_double = 0;
+  int errors = 0;
+  const char *ns[256];
+  int ps[256];
+
+  for (i = 0; i < nios2_fpu_max_insn; i++)
+    {
+      if (nios2_fpu_insns[i].is_double && nios2_fpu_insns[i].N >= 0)
+        {
+          has_double = 1;
+        }
+    }
+
+  if (has_double)
+    {
+      for (i = 0; i < nios2_fpu_max_insn; i++)
+        {
+          if (nios2_fpu_insns[i].needed_by_double
+              && nios2_fpu_insns[i].N < 0)
+            {
+              if (is_pragma)
+                {
+                  error ("either switch `-mcustom-%s' or `#pragma custom_%s' is required for double precision floating point",
+                         nios2_fpu_insns[i].option,
+                         nios2_fpu_insns[i].option);
+                }
+              else
+                {
+                  error ("switch `-mcustom-%s' is required for double precision floating point",
+                         nios2_fpu_insns[i].option);
+                }
+              errors = 1;
+            }
+        }
+    }
+
+  /*
+   * Warn if the user has certain exotic operations that won't get used
+   * without -funsafe-math-optimizations, See expand_builtin () in
+   * bulitins.c.
+   */
+  if (!flag_unsafe_math_optimizations)
+    {
+      for (i = 0; i < nios2_fpu_max_insn; i++)
+        {
+          if (nios2_fpu_insns[i].needs_unsafe && nios2_fpu_insns[i].N >= 0)
+            {
+              warning ("%s%s' has no effect unless -funsafe-math-optimizations is specified",
+                       is_pragma ? "`#pragma custom_" : "switch `-mcustom-",
+                       nios2_fpu_insns[i].option);
+              /* Just one warning per function per compilation unit, please. */
+              nios2_fpu_insns[i].needs_unsafe = 0;
+            }
+        }
+    }
+
+  /*
+   * Warn if the user is trying to use -mcustom-fmins et. al, that won't
+   * get used without -ffinite-math-only.  See fold in fold () in
+   * fold-const.c
+   */
+  if (!flag_finite_math_only)
+    {
+      for (i = 0; i < nios2_fpu_max_insn; i++)
+        {
+          if (nios2_fpu_insns[i].needs_finite && nios2_fpu_insns[i].N >= 0)
+            {
+              warning ("%s%s' has no effect unless -ffinite-math-only is specified",
+                       is_pragma ? "`#pragma custom_" : "switch `-mcustom-",
+                       nios2_fpu_insns[i].option);
+              /* Just one warning per function per compilation unit, please. */
+              nios2_fpu_insns[i].needs_finite = 0;
+            }
+        }
+    }
+
+  /*
+   * Warn the user about double precision divide braindamage until we
+   * can fix it properly.  See the RDIV_EXPR case of expand_expr_real in
+   * expr.c.
+   */
+  {
+    static int warned = 0;
+    if (flag_unsafe_math_optimizations
+        && !optimize_size
+        && nios2_fpu_insns[nios2_fpu_divdf3].N >= 0
+        && !warned)
+      {
+        warning ("%s%s' behaves poorly without -Os",
+                 is_pragma ? "`#pragma custom_" : "switch `-mcustom-",
+                 nios2_fpu_insns[nios2_fpu_divdf3].option);
+        warned = 1;
+      }
+  }
+
+  /*
+   * The following bit of voodoo is lifted from the generated file
+   * insn-opinit.c: to allow #pragmas to work properly, we have to tweak
+   * the optab_table manually -- it only gets initialized once after the
+   * switches are handled and before any #pragmas are seen.
+   */
+  if (is_pragma)
+    {
+      /* Only do this if the optabs have already been defined, not
+         when we're handling command line switches. */
+      addv_optab->handlers[SFmode].insn_code =
+      add_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      addv_optab->handlers[DFmode].insn_code =
+      add_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      subv_optab->handlers[SFmode].insn_code =
+      sub_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      subv_optab->handlers[DFmode].insn_code =
+      sub_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      smulv_optab->handlers[SFmode].insn_code =
+      smul_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      smulv_optab->handlers[DFmode].insn_code =
+      smul_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      sdiv_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      sdiv_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      negv_optab->handlers[SFmode].insn_code =
+      neg_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      negv_optab->handlers[DFmode].insn_code =
+      neg_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      smin_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      smin_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      smax_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      smax_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      absv_optab->handlers[SFmode].insn_code =
+      abs_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      absv_optab->handlers[DFmode].insn_code =
+      abs_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      sqrt_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      sqrt_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      cos_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      cos_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      sin_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      sin_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      tan_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      tan_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      atan_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      atan_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      exp_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      exp_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      log_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      log_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+      sfloat_optab->handlers[SFmode][SImode].insn_code = CODE_FOR_nothing;
+      sfloat_optab->handlers[DFmode][SImode].insn_code = CODE_FOR_nothing;
+      ufloat_optab->handlers[SFmode][SImode].insn_code = CODE_FOR_nothing;
+      ufloat_optab->handlers[DFmode][SImode].insn_code = CODE_FOR_nothing;
+      sfix_optab->handlers[SImode][SFmode].insn_code = CODE_FOR_nothing;
+      sfix_optab->handlers[SImode][DFmode].insn_code = CODE_FOR_nothing;
+      ufix_optab->handlers[SImode][SFmode].insn_code = CODE_FOR_nothing;
+      ufix_optab->handlers[SImode][DFmode].insn_code = CODE_FOR_nothing;
+      sext_optab->handlers[DFmode][SFmode].insn_code = CODE_FOR_nothing;
+      trunc_optab->handlers[SFmode][DFmode].insn_code = CODE_FOR_nothing;
+      cmp_optab->handlers[SFmode].insn_code = CODE_FOR_nothing;
+      cmp_optab->handlers[DFmode].insn_code = CODE_FOR_nothing;
+
+      if (HAVE_addsf3)
+        addv_optab->handlers[SFmode].insn_code =
+        add_optab->handlers[SFmode].insn_code = CODE_FOR_addsf3;
+      if (HAVE_adddf3)
+        addv_optab->handlers[DFmode].insn_code =
+        add_optab->handlers[DFmode].insn_code = CODE_FOR_adddf3;
+      if (HAVE_subsf3)
+        subv_optab->handlers[SFmode].insn_code =
+        sub_optab->handlers[SFmode].insn_code = CODE_FOR_subsf3;
+      if (HAVE_subdf3)
+        subv_optab->handlers[DFmode].insn_code =
+        sub_optab->handlers[DFmode].insn_code = CODE_FOR_subdf3;
+      if (HAVE_mulsf3)
+        smulv_optab->handlers[SFmode].insn_code =
+        smul_optab->handlers[SFmode].insn_code = CODE_FOR_mulsf3;
+      if (HAVE_muldf3)
+        smulv_optab->handlers[DFmode].insn_code =
+        smul_optab->handlers[DFmode].insn_code = CODE_FOR_muldf3;
+      if (HAVE_divsf3)
+        sdiv_optab->handlers[SFmode].insn_code = CODE_FOR_divsf3;
+      if (HAVE_divdf3)
+        sdiv_optab->handlers[DFmode].insn_code = CODE_FOR_divdf3;
+      if (HAVE_negsf2)
+        negv_optab->handlers[SFmode].insn_code =
+        neg_optab->handlers[SFmode].insn_code = CODE_FOR_negsf2;
+      if (HAVE_negdf2)
+        negv_optab->handlers[DFmode].insn_code =
+        neg_optab->handlers[DFmode].insn_code = CODE_FOR_negdf2;
+      if (HAVE_minsf3)
+        smin_optab->handlers[SFmode].insn_code = CODE_FOR_minsf3;
+      if (HAVE_mindf3)
+        smin_optab->handlers[DFmode].insn_code = CODE_FOR_mindf3;
+      if (HAVE_maxsf3)
+        smax_optab->handlers[SFmode].insn_code = CODE_FOR_maxsf3;
+      if (HAVE_maxdf3)
+        smax_optab->handlers[DFmode].insn_code = CODE_FOR_maxdf3;
+      if (HAVE_abssf2)
+        absv_optab->handlers[SFmode].insn_code =
+        abs_optab->handlers[SFmode].insn_code = CODE_FOR_abssf2;
+      if (HAVE_absdf2)
+        absv_optab->handlers[DFmode].insn_code =
+        abs_optab->handlers[DFmode].insn_code = CODE_FOR_absdf2;
+      if (HAVE_sqrtsf2)
+        sqrt_optab->handlers[SFmode].insn_code = CODE_FOR_sqrtsf2;
+      if (HAVE_sqrtdf2)
+        sqrt_optab->handlers[DFmode].insn_code = CODE_FOR_sqrtdf2;
+      if (HAVE_cossf2)
+        cos_optab->handlers[SFmode].insn_code = CODE_FOR_cossf2;
+      if (HAVE_cosdf2)
+        cos_optab->handlers[DFmode].insn_code = CODE_FOR_cosdf2;
+      if (HAVE_sinsf2)
+        sin_optab->handlers[SFmode].insn_code = CODE_FOR_sinsf2;
+      if (HAVE_sindf2)
+        sin_optab->handlers[DFmode].insn_code = CODE_FOR_sindf2;
+      if (HAVE_tansf2)
+        tan_optab->handlers[SFmode].insn_code = CODE_FOR_tansf2;
+      if (HAVE_tandf2)
+        tan_optab->handlers[DFmode].insn_code = CODE_FOR_tandf2;
+      if (HAVE_atansf2)
+        atan_optab->handlers[SFmode].insn_code = CODE_FOR_atansf2;
+      if (HAVE_atandf2)
+        atan_optab->handlers[DFmode].insn_code = CODE_FOR_atandf2;
+      if (HAVE_expsf2)
+        exp_optab->handlers[SFmode].insn_code = CODE_FOR_expsf2;
+      if (HAVE_expdf2)
+        exp_optab->handlers[DFmode].insn_code = CODE_FOR_expdf2;
+      if (HAVE_logsf2)
+        log_optab->handlers[SFmode].insn_code = CODE_FOR_logsf2;
+      if (HAVE_logdf2)
+        log_optab->handlers[DFmode].insn_code = CODE_FOR_logdf2;
+      if (HAVE_floatsisf2)
+        sfloat_optab->handlers[SFmode][SImode].insn_code = CODE_FOR_floatsisf2;
+      if (HAVE_floatsidf2)
+        sfloat_optab->handlers[DFmode][SImode].insn_code = CODE_FOR_floatsidf2;
+      if (HAVE_floatunssisf2)
+        ufloat_optab->handlers[SFmode][SImode].insn_code = CODE_FOR_floatunssisf2;
+      if (HAVE_floatunssidf2)
+        ufloat_optab->handlers[DFmode][SImode].insn_code = CODE_FOR_floatunssidf2;
+      if (HAVE_fixsfsi2)
+        sfix_optab->handlers[SImode][SFmode].insn_code = CODE_FOR_fixsfsi2;
+      if (HAVE_fixdfsi2)
+        sfix_optab->handlers[SImode][DFmode].insn_code = CODE_FOR_fixdfsi2;
+      if (HAVE_fixunssfsi2)
+        ufix_optab->handlers[SImode][SFmode].insn_code = CODE_FOR_fixunssfsi2;
+      if (HAVE_fixunsdfsi2)
+        ufix_optab->handlers[SImode][DFmode].insn_code = CODE_FOR_fixunsdfsi2;
+      if (HAVE_extendsfdf2)
+        sext_optab->handlers[DFmode][SFmode].insn_code = CODE_FOR_extendsfdf2;
+      if (HAVE_truncdfsf2)
+        trunc_optab->handlers[SFmode][DFmode].insn_code = CODE_FOR_truncdfsf2;
+      if (HAVE_cmpsf)
+        cmp_optab->handlers[SFmode].insn_code = CODE_FOR_cmpsf;
+      if (HAVE_cmpdf)
+        cmp_optab->handlers[DFmode].insn_code = CODE_FOR_cmpdf;
+    }
+
+  /* Check for duplicate values of N */
+  for (i = 0; i < 256; i++)
+    {
+      ns[i] = 0;
+      ps[i] = 0;
+    }
+
+  for (i = 0; i < nios2_fpu_max_insn; i++)
+    {
+      int N = nios2_fpu_insns[i].N;
+      if (N >= 0)
+        {
+          if (ns[N])
+            {
+              error ("%s%s' conflicts with %s%s'",
+                     is_pragma ? "`#pragma custom_" : "switch `-mcustom-",
+                     nios2_fpu_insns[i].option,
+                     ps[N] ? "`#pragma custom_" : "switch `-mcustom-",
+                     ns[N]);
+              errors = 1;
+            }
+          else if (builtin_custom_seen[N])
+            {
+              error ("call to `%s' conflicts with %s%s'",
+                     builtin_custom_seen[N],
+                     (nios2_fpu_insns[i].pragma_seen
+                      ? "`#pragma custom_" : "switch `-mcustom-"),
+                     nios2_fpu_insns[i].option);
+              errors = 1;
+            }
+          else
+            {
+              ns[N] = nios2_fpu_insns[i].option;
+              ps[N] = nios2_fpu_insns[i].pragma_seen;
+            }
+        }
+    }
+
+  if (errors)
+    {
+      fatal_error ("conflicting use of -mcustom switches, #pragmas, and/or __builtin_custom_ functions");
+    }
+}
+
+static void
+nios2_handle_custom_fpu_cfg (const char *cfg, int is_pragma)
+{
+#undef NIOS2_FPU_INSN
+#define NIOS2_FPU_INSN(opt, insn, args) \
+  int opt = nios2_fpu_insns[NIOS2_CONCAT (nios2_fpu_, insn)].N;
+NIOS2_FOR_ALL_FPU_INSNS
+
+  /*
+   * ??? These are just some sample possibilities.  We'll change these
+   * at the last minute to match the capabilities of the actual fpu.
+   */
+  if (!strcasecmp (cfg, "60-1"))
+    {
+      fmuls = 252;
+      fadds = 253;
+      fsubs = 254;
+      flag_single_precision_constant = 1;
+    }
+  else if (!strcasecmp (cfg, "60-2"))
+    {
+      fmuls = 252;
+      fadds = 253;
+      fsubs = 254;
+      fdivs = 255;
+      flag_single_precision_constant = 1;
+    }
+  else
+    {
+      warning ("ignoring unrecognized %sfpu-cfg' value `%s'",
+               is_pragma ? "`#pragma custom_" : "switch -mcustom-", cfg);
+    }
+
+#undef NIOS2_FPU_INSN
+#define NIOS2_FPU_INSN(opt, insn, args) \
+  nios2_fpu_insns[NIOS2_CONCAT (nios2_fpu_, insn)].N = opt;
+NIOS2_FOR_ALL_FPU_INSNS
+
+  /* Guard against errors in the standard configurations. */
+  nios2_custom_check_insns (is_pragma);
+}
+
 void
 override_options ()
 {
+  int i;
+
   /* Function to allocate machine-dependent function status.  */
   init_machine_status = &nios2_init_machine_status;
 
@@ -675,6 +1137,63 @@ override_options ()
       stack_limit_rtx = gen_rtx_REG(SImode, ET_REGNO);
     }
   
+  for (i = 0; i < nios2_fpu_max_insn; i++)
+    {
+      nios2_fpu_insns[i].is_double = (nios2_fpu_insns[i].args[0] == 'd'
+                                      || nios2_fpu_insns[i].args[0] == 'd'
+                                      || nios2_fpu_insns[i].args[0] == 'd');
+      nios2_fpu_insns[i].needed_by_double = (i == nios2_fpu_nios2_fwrx
+                                             || i == nios2_fpu_nios2_fwry
+                                             || i == nios2_fpu_nios2_frdxlo
+                                             || i == nios2_fpu_nios2_frdxhi
+                                             || i == nios2_fpu_nios2_frdy);
+      nios2_fpu_insns[i].needs_unsafe = (i == nios2_fpu_cossf2
+                                         || i == nios2_fpu_cosdf2
+                                         || i == nios2_fpu_sinsf2
+                                         || i == nios2_fpu_sindf2
+                                         || i == nios2_fpu_tansf2
+                                         || i == nios2_fpu_tandf2
+                                         || i == nios2_fpu_atansf2
+                                         || i == nios2_fpu_atandf2
+                                         || i == nios2_fpu_expsf2
+                                         || i == nios2_fpu_expdf2
+                                         || i == nios2_fpu_logsf2
+                                         || i == nios2_fpu_logdf2);
+      nios2_fpu_insns[i].needs_finite = (i == nios2_fpu_minsf3
+                                         || i == nios2_fpu_maxsf3
+                                         || i == nios2_fpu_mindf3
+                                         || i == nios2_fpu_maxdf3);
+    }
+
+  /*
+   * We haven't seen any __builtin_custom functions yet.
+   */
+  for (i = 0; i < 256; i++)
+    {
+      builtin_custom_seen[i] = 0;
+    }
+
+  /*
+   * Set up default handling for floating point custom instructions.
+   *
+   * Putting things in this order means that the -mcustom-fpu-cfg=
+   * switch will always be overridden by individual -mcustom-fadds=
+   * switches, regardless of the order in which they were specified
+   * on the command line.  ??? Remember to document this.
+   */
+  if (nios2_custom_fpu_cfg_string && *nios2_custom_fpu_cfg_string)
+    {
+      nios2_handle_custom_fpu_cfg (nios2_custom_fpu_cfg_string, 0);
+    }
+
+  for (i = 0; i < nios2_fpu_max_insn; i++)
+    {
+      nios2_custom_switch (nios2_fpu_insns[i].value,
+                           &nios2_fpu_insns[i].N,
+                           nios2_fpu_insns[i].option);
+    }
+
+  nios2_custom_check_insns (0);
 }
 
 void
@@ -1053,6 +1572,31 @@ gen_int_relational (enum rtx_code test_code, /* relational test (EQ, etc) */
 
   branch_p = (destination != 0);
 
+  /* Handle floating point comparison directly. */
+  if (branch_type == CMP_SF || branch_type == CMP_DF)
+    {
+      enum machine_mode float_mode = (branch_type == CMP_SF) ? SFmode : DFmode;
+      if (!register_operand (cmp0, float_mode)
+          || !register_operand (cmp1, float_mode))
+        {
+          abort ();
+        }
+      if (branch_p)
+        {
+          rtx cond = gen_rtx (p_info->test_code_reg, SImode, cmp0, cmp1);
+          rtx label = gen_rtx_LABEL_REF (VOIDmode, destination);
+          rtx insn = gen_rtx_SET (VOIDmode, pc_rtx,
+                                  gen_rtx_IF_THEN_ELSE (VOIDmode,
+                                                        cond, label, pc_rtx));
+          emit_jump_insn (insn);
+        }
+      else
+        {
+          emit_move_insn (result, gen_rtx (test_code, SImode, cmp0, cmp1));
+        }
+      return;
+    }
+
   /* We can't, under any circumstances, have const_ints in cmp0
      ??? Actually we could have const0 */
   if (GET_CODE (cmp0) == CONST_INT)
@@ -1276,7 +1820,7 @@ nios2_in_small_data_p (tree exp)
 
       /* If this is an incomplete type with size 0, then we can't put it
          in sdata because it might be too big when completed.  */
-      if (size > 0 && size <= nios2_section_threshold)
+      if (size > 0 && (unsigned HOST_WIDE_INT)size <= nios2_section_threshold)
 	return true;
     }
 
@@ -1341,13 +1885,92 @@ nios2_pragma_no_reverse_bitfields (struct cpp_reader *pfile ATTRIBUTE_UNUSED)
   nios2_pragma_reverse_bitfields_flag = -1; /* Forward */
 }
 
+/* Handle the various #pragma custom_<switch>s */
+static void
+nios2_pragma_fpu (int *value, const char *opt, int *seen)
+{
+  tree t;
+  if (c_lex (&t) != CPP_NUMBER)
+    {
+      error ("`#pragma custom_%s' value must be a number between 0 and 255",
+             opt);
+      return;
+    }
+
+  if (TREE_INT_CST_HIGH (t) == 0
+      && TREE_INT_CST_LOW (t) <= 255)
+    {
+      *value = (int)TREE_INT_CST_LOW (t);
+      *seen = 1;
+    }
+  else
+    {
+      error ("`#pragma custom_%s' value must be between 0 and 255", opt);
+    }
+  nios2_custom_check_insns (1);
+}
+
+/* Handle the various #pragma no_custom_<switch>s */
+static void
+nios2_pragma_no_fpu (int *value, const char *opt ATTRIBUTE_UNUSED)
+{
+  *value = -1;
+  nios2_custom_check_insns (1);
+}
+
+#undef NIOS2_FPU_INSN
+#define NIOS2_FPU_INSN(opt, insn, args) \
+static void \
+NIOS2_CONCAT (nios2_pragma_, insn) \
+  (struct cpp_reader *pfile ATTRIBUTE_UNUSED) \
+{ \
+  nios2_fpu_info *inf = &(nios2_fpu_insns[NIOS2_CONCAT (nios2_fpu_, insn)]); \
+  nios2_pragma_fpu (&(inf->N), inf->option, &(inf->pragma_seen)); \
+} \
+static void \
+NIOS2_CONCAT (nios2_pragma_no_, insn) \
+  (struct cpp_reader *pfile ATTRIBUTE_UNUSED) \
+{ \
+  nios2_fpu_info *inf = &(nios2_fpu_insns[NIOS2_CONCAT (nios2_fpu_, insn)]); \
+  nios2_pragma_no_fpu (&(inf->N), inf->option); \
+}
+NIOS2_FOR_ALL_FPU_INSNS
+
+static void
+nios2_pragma_handle_custom_fpu_cfg (struct cpp_reader *pfile ATTRIBUTE_UNUSED)
+{
+  tree t;
+  if (c_lex (&t) != CPP_STRING)
+    {
+      error ("`#pragma custom_fpu_cfg' value must be a string");
+      return;
+    }
+
+  if (TREE_STRING_LENGTH (t) > 0)
+    {
+      nios2_handle_custom_fpu_cfg (TREE_STRING_POINTER (t), 1);
+    }
+}
+
 void
 nios2_register_target_pragmas ()
 {
+  int i;
+
   c_register_pragma (0, "reverse_bitfields",
                      nios2_pragma_reverse_bitfields);
   c_register_pragma (0, "no_reverse_bitfields",
                      nios2_pragma_no_reverse_bitfields);
+
+  for (i = 0; i < nios2_fpu_max_insn; i++)
+    {
+      nios2_fpu_info *inf = &(nios2_fpu_insns[i]);
+      c_register_pragma (0, inf->pname, inf->pragma);
+      c_register_pragma (0, inf->nopname, inf->nopragma);
+    }
+
+  c_register_pragma (0, "custom_fpu_cfg",
+                     nios2_pragma_handle_custom_fpu_cfg);
 }
 
 /* Handle a "reverse_bitfields" or "no_reverse_bitfields" attribute.
@@ -1489,6 +2112,7 @@ nios2_reverse_bitfield_layout_p (tree record_type)
      H: for %hiadj
      L: for %lo
      U: for upper half of 32 bit value
+     D: for the upper 32-bits of a 64-bit double value
  */
 
 void
@@ -1521,6 +2145,12 @@ nios2_print_operand (FILE *file, rtx op, int letter)
 	  return;
 	}
     }
+      else if (letter == 'D')
+        {
+          fprintf (file, "%s", reg_names[REGNO (op)+1]);
+          return;
+        }
+      break;
 
 
   switch (GET_CODE (op))
@@ -1592,6 +2222,7 @@ nios2_print_operand (FILE *file, rtx op, int letter)
     default:
       break;
     }
+      break;
 
   fprintf (stderr, "Missing way to print (%c) ", letter);
   debug_rtx (op);
@@ -1672,6 +2303,7 @@ nios2_print_operand_address (FILE *file, rtx op)
     default:
       break;
     }
+      break;
 
   fprintf (stderr, "Missing way to print address\n");
   debug_rtx (op);
@@ -1745,6 +2377,7 @@ reg_or_0_operand (rtx op, enum machine_mode mode)
     default:
       break;
     }
+      break;
 
   return register_operand (op, mode);
 }
@@ -1767,6 +2400,357 @@ custom_insn_opcode (rtx op, enum machine_mode mode ATTRIBUTE_UNUSED)
 
 
 
+
+/*****************************************************************************
+**
+** custom fpu instruction output
+**
+*****************************************************************************/
+
+static const char *nios2_custom_fpu_insn_zdz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_zsz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_szz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_sss (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_ssz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_iss (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_ddd (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_ddz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_idd (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_siz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_suz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_diz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_duz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_isz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_usz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_idz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_udz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_dsz (rtx, int, const char *);
+static const char *nios2_custom_fpu_insn_sdz (rtx, int, const char *);
+
+static const char *
+nios2_custom_fpu_insn_zdz (rtx insn, int N, const char *opt)
+{
+  static char buf[1024];
+
+  if (N < 0)
+    {
+      fatal_insn ("attempt to use disabled fpu instruction", insn);
+    }
+  if (snprintf (buf, sizeof (buf),
+                "custom\t%d, zero, %%0, %%D0 # %s %%0",
+                N, opt) >= (int)sizeof (buf))
+    {
+      fatal_insn ("buffer overflow", insn);
+    }
+  return buf;
+}
+
+static const char *
+nios2_custom_fpu_insn_zsz (rtx insn, int N, const char *opt)
+{
+  static char buf[1024];
+
+  if (N < 0)
+    {
+      fatal_insn ("attempt to use disabled fpu instruction", insn);
+    }
+  if (snprintf (buf, sizeof (buf),
+                "custom\t%d, zero, %%0, zero # %s %%0",
+                N, opt) >= (int)sizeof (buf))
+    {
+      fatal_insn ("buffer overflow", insn);
+    }
+  return buf;
+}
+
+static const char *
+nios2_custom_fpu_insn_szz (rtx insn, int N, const char *opt)
+{
+  static char buf[1024];
+
+  if (N < 0)
+    {
+      fatal_insn ("attempt to use disabled fpu instruction", insn);
+    }
+  if (snprintf (buf, sizeof (buf),
+                "custom\t%d, %%0, zero, zero # %s %%0",
+                N, opt) >= (int)sizeof (buf))
+    {
+      fatal_insn ("buffer overflow", insn);
+    }
+  return buf;
+}
+
+static const char *
+nios2_custom_fpu_insn_sss (rtx insn, int N, const char *opt)
+{
+  static char buf[1024];
+
+  if (N < 0)
+    {
+      fatal_insn ("attempt to use disabled fpu instruction", insn);
+    }
+  if (snprintf (buf, sizeof (buf),
+                "custom\t%d, %%0, %%1, %%2 # %s %%0, %%1, %%2",
+                N, opt) >= (int)sizeof (buf))
+    {
+      fatal_insn ("buffer overflow", insn);
+    }
+  return buf;
+}
+
+static const char *
+nios2_custom_fpu_insn_ssz (rtx insn, int N, const char *opt)
+{
+  static char buf[1024];
+
+  if (N < 0)
+    {
+      fatal_insn ("attempt to use disabled fpu instruction", insn);
+    }
+  if (snprintf (buf, sizeof (buf),
+                "custom\t%d, %%0, %%1, zero # %s %%0, %%1",
+                N, opt) >= (int)sizeof (buf))
+    {
+      fatal_insn ("buffer overflow", insn);
+    }
+  return buf;
+}
+
+static const char *
+nios2_custom_fpu_insn_iss (rtx insn, int N, const char *opt)
+{
+  return nios2_custom_fpu_insn_sss (insn, N, opt);
+}
+
+static const char *
+nios2_custom_fpu_insn_ddd (rtx insn, int N, const char *opt)
+{
+  static char buf[1024];
+
+  if (N < 0
+      || nios2_fpu_insns[nios2_fpu_nios2_frdy].N < 0
+      || nios2_fpu_insns[nios2_fpu_nios2_fwrx].N < 0)
+    {
+      fatal_insn ("attempt to use disabled fpu instruction", insn);
+    }
+  if (snprintf (buf, sizeof (buf),
+                "custom\t%d, zero, %%1, %%D1 # fwrx %%1\n\t"
+                "custom\t%d, %%D0, %%2, %%D2 # %s %%0, %%1, %%2\n\t"
+                "custom\t%d, %%0, zero, zero # frdy %%0",
+                nios2_fpu_insns[nios2_fpu_nios2_fwrx].N,
+                N, opt,
+                nios2_fpu_insns[nios2_fpu_nios2_frdy].N) >= (int)sizeof (buf))
+    {
+      fatal_insn ("buffer overflow", insn);
+    }
+  return buf;
+}
+
+static const char *
+nios2_custom_fpu_insn_ddz (rtx insn, int N, const char *opt)
+{
+  static char buf[1024];
+
+  if (N < 0 || nios2_fpu_insns[nios2_fpu_nios2_frdy].N < 0)
+    {
+      fatal_insn ("attempt to use disabled fpu instruction", insn);
+    }
+  if (snprintf (buf, sizeof (buf),
+                "custom\t%d, %%D0, %%1, %%D1 # %s %%0, %%1\n\t"
+                "custom\t%d, %%0, zero, zero # frdy %%0",
+                N, opt,
+                nios2_fpu_insns[nios2_fpu_nios2_frdy].N) >= (int)sizeof (buf))
+    {
+      fatal_insn ("buffer overflow", insn);
+    }
+  return buf;
+}
+
+static const char *
+nios2_custom_fpu_insn_idd (rtx insn, int N, const char *opt)
+{
+  static char buf[1024];
+
+  if (N < 0 || nios2_fpu_insns[nios2_fpu_nios2_fwrx].N < 0)
+    {
+      fatal_insn ("attempt to use disabled fpu instruction", insn);
+    }
+  if (snprintf (buf, sizeof (buf),
+                "custom\t%d, zero, %%1, %%D1 # fwrx %%1\n\t"
+                "custom\t%d, %%0, %%2, %%D2 # %s %%0, %%1, %%2",
+                nios2_fpu_insns[nios2_fpu_nios2_fwrx].N,
+                N, opt) >= (int)sizeof (buf))
+    {
+      fatal_insn ("buffer overflow", insn);
+    }
+  return buf;
+}
+
+static const char *
+nios2_custom_fpu_insn_siz (rtx insn, int N, const char *opt)
+{
+  return nios2_custom_fpu_insn_ssz (insn, N, opt);
+}
+
+static const char *
+nios2_custom_fpu_insn_suz (rtx insn, int N, const char *opt)
+{
+  return nios2_custom_fpu_insn_ssz (insn, N, opt);
+}
+
+static const char *
+nios2_custom_fpu_insn_diz (rtx insn, int N, const char *opt)
+{
+  return nios2_custom_fpu_insn_dsz (insn, N, opt);
+}
+
+static const char *
+nios2_custom_fpu_insn_duz (rtx insn, int N, const char *opt)
+{
+  return nios2_custom_fpu_insn_dsz (insn, N, opt);
+}
+
+static const char *
+nios2_custom_fpu_insn_isz (rtx insn, int N, const char *opt)
+{
+  return nios2_custom_fpu_insn_ssz (insn, N, opt);
+}
+
+static const char *
+nios2_custom_fpu_insn_usz (rtx insn, int N, const char *opt)
+{
+  return nios2_custom_fpu_insn_ssz (insn, N, opt);
+}
+
+static const char *
+nios2_custom_fpu_insn_idz (rtx insn, int N, const char *opt)
+{
+  return nios2_custom_fpu_insn_sdz (insn, N, opt);
+}
+
+static const char *
+nios2_custom_fpu_insn_udz (rtx insn, int N, const char *opt)
+{
+  return nios2_custom_fpu_insn_sdz (insn, N, opt);
+}
+
+static const char *
+nios2_custom_fpu_insn_dsz (rtx insn, int N, const char *opt)
+{
+  static char buf[1024];
+
+  if (N < 0 || nios2_fpu_insns[nios2_fpu_nios2_frdy].N < 0)
+    {
+      fatal_insn ("attempt to use disabled fpu instruction", insn);
+    }
+  if (snprintf (buf, sizeof (buf),
+                "custom\t%d, %%D0, %%1, zero # %s %%0, %%1\n\t"
+                "custom\t%d, %%0, zero, zero # frdy %%0",
+                N, opt,
+                nios2_fpu_insns[nios2_fpu_nios2_frdy].N) >= (int)sizeof (buf))
+    {
+      fatal_insn ("buffer overflow", insn);
+    }
+  return buf;
+}
+
+static const char *
+nios2_custom_fpu_insn_sdz (rtx insn, int N, const char *opt)
+{
+  static char buf[1024];
+
+  if (N < 0)
+    {
+      fatal_insn ("attempt to use disabled fpu instruction", insn);
+    }
+  if (snprintf (buf, sizeof (buf),
+                "custom\t%d, %%0, %%1, %%D1 # %s %%0, %%1",
+                N, opt) >= (int)sizeof (buf))
+    {
+      fatal_insn ("buffer overflow", insn);
+    }
+  return buf;
+}
+
+#undef NIOS2_FPU_INSN
+#define NIOS2_FPU_INSN(opt, insn, args) \
+static const char * \
+NIOS2_CONCAT (nios2_output_fpu_insn_, insn) (rtx i) \
+{ \
+  return NIOS2_CONCAT (nios2_custom_fpu_insn_, args) \
+           (i, \
+            nios2_fpu_insns[NIOS2_CONCAT (nios2_fpu_, insn)].N, \
+            nios2_fpu_insns[NIOS2_CONCAT (nios2_fpu_, insn)].option); \
+}
+NIOS2_FOR_ALL_FPU_INSNS
+
+const char *
+nios2_output_fpu_insn_cmps (rtx insn, enum rtx_code cond)
+{
+  static char buf[1024];
+  int N;
+  const char *opt;
+  switch (cond)
+    {
+    case EQ: N = nios2_fpu_insns[nios2_fpu_nios2_seqsf].N; opt = "fcmpeqs"; break;
+    case NE: N = nios2_fpu_insns[nios2_fpu_nios2_snesf].N; opt = "fcmpnes"; break;
+    case GT: N = nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N; opt = "fcmpgts"; break;
+    case GE: N = nios2_fpu_insns[nios2_fpu_nios2_sgesf].N; opt = "fcmpges"; break;
+    case LT: N = nios2_fpu_insns[nios2_fpu_nios2_sltsf].N; opt = "fcmplts"; break;
+    case LE: N = nios2_fpu_insns[nios2_fpu_nios2_slesf].N; opt = "fcmples"; break;
+    default: fatal_insn ("bad single compare", insn);
+    }
+  if (N < 0)
+    {
+      fatal_insn ("attempt to use disabled fpu instruction", insn);
+    }
+  /*
+   * ??? This raises the whole vexing issue of how to handle
+   * out-of-range branches.  Punt for now, seeing as how nios2-elf-as
+   * doesn't even _try_ to handle out-of-range branches yet!
+   */
+  if (snprintf (buf, sizeof (buf),
+                "custom\t%d, at, %%2, %%3 # %s at, %%2, %%3\n\t"
+                "bne\tat, zero, %%l1",
+                N, opt) >= (int)sizeof (buf))
+    {
+      fatal_insn ("buffer overflow", insn);
+    }
+  return buf;
+}
+
+const char *
+nios2_output_fpu_insn_cmpd (rtx insn, enum rtx_code cond)
+{
+  static char buf[1024];
+  int N;
+  const char *opt;
+  switch (cond)
+    {
+    case EQ: N = nios2_fpu_insns[nios2_fpu_nios2_seqdf].N; opt = "fcmpeqd"; break;
+    case NE: N = nios2_fpu_insns[nios2_fpu_nios2_snedf].N; opt = "fcmpned"; break;
+    case GT: N = nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N; opt = "fcmpgtd"; break;
+    case GE: N = nios2_fpu_insns[nios2_fpu_nios2_sgedf].N; opt = "fcmpged"; break;
+    case LT: N = nios2_fpu_insns[nios2_fpu_nios2_sltdf].N; opt = "fcmpltd"; break;
+    case LE: N = nios2_fpu_insns[nios2_fpu_nios2_sledf].N; opt = "fcmpled"; break;
+    default: fatal_insn ("bad double compare", insn);
+    }
+  if (N < 0 || nios2_fpu_insns[nios2_fpu_nios2_fwrx].N < 0)
+    {
+      fatal_insn ("attempt to use disabled fpu instruction", insn);
+    }
+  if (snprintf (buf, sizeof (buf),
+                "custom\t%d, zero, %%2, %%D2 # fwrx %%2\n\t"
+                "custom\t%d, at, %%3, %%D3 # %s at, %%2, %%3\n\t"
+                "bne\tat, zero, %%l1",
+                nios2_fpu_insns[nios2_fpu_nios2_fwrx].N,
+                N, opt) >= (int)sizeof (buf))
+    {
+      fatal_insn ("buffer overflow", insn);
+    }
+  return buf;
+}
 
 
 
@@ -1823,43 +2807,6 @@ init_cumulative_args (CUMULATIVE_ARGS *cum,
 }
 
 
-/* Update the data in CUM to advance over an argument
-   of mode MODE and data type TYPE.
-   (TYPE is null for libcalls where that information may not be available.)  */
-
-void
-function_arg_advance (CUMULATIVE_ARGS *cum, enum machine_mode mode, 
-                      tree type ATTRIBUTE_UNUSED, int named ATTRIBUTE_UNUSED)
-{
-  HOST_WIDE_INT param_size;
-
-  if (mode == BLKmode)
-    {
-      param_size = int_size_in_bytes (type);
-      if (param_size < 0)
-	internal_error
-	  ("Do not know how to handle large structs or variable length types");
-    }
-  else
-    {
-      param_size = GET_MODE_SIZE (mode);
-    }
-
-  /* convert to words (round up) */
-  param_size = (3 + param_size) / 4;
-
-  if (cum->regs_used + param_size > NUM_ARG_REGS)
-    {
-      cum->regs_used = NUM_ARG_REGS;
-    }
-  else
-    {
-      cum->regs_used += param_size;
-    }
-
-  return;
-}
-
 /* Define where to put the arguments to a function.  Value is zero to
    push the argument on the stack, or a hard register in which to
    store the argument.
@@ -1884,6 +2831,29 @@ function_arg (const CUMULATIVE_ARGS *cum, enum machine_mode mode,
     }
 
   return return_rtx;
+}
+
+/*
+ * This is just default_must_pass_in_stack from calls.c sans the final
+ * test for padding which isn't needed: we define BLOCK_REG_PADDING
+ * instead.
+ */
+int
+nios2_must_pass_in_stack (enum machine_mode mode, tree type)
+{
+  if (!type)
+    return false;
+
+  /* If the type has variable size...  */
+  if (TREE_CODE (TYPE_SIZE (type)) != INTEGER_CST)
+    return true;
+
+  /* If the type is marked as addressable (it is required
+     to be constructed into the stack)...  */
+  if (TREE_ADDRESSABLE (type))
+    return true;
+
+  return false;
 }
 
 int
@@ -1919,6 +2889,74 @@ function_arg_partial_nregs (const CUMULATIVE_ARGS *cum,
     }
 }
 
+
+/* Update the data in CUM to advance over an argument
+   of mode MODE and data type TYPE.
+   (TYPE is null for libcalls where that information may not be available.)  */
+
+void
+function_arg_advance (CUMULATIVE_ARGS *cum, enum machine_mode mode, 
+                      tree type ATTRIBUTE_UNUSED, int named ATTRIBUTE_UNUSED)
+{
+  HOST_WIDE_INT param_size;
+
+  if (mode == BLKmode)
+    {
+      param_size = int_size_in_bytes (type);
+      if (param_size < 0)
+        internal_error
+          ("Do not know how to handle large structs or variable length types");
+    }
+  else
+    {
+      param_size = GET_MODE_SIZE (mode);
+    }
+
+  /* convert to words (round up) */
+  param_size = (3 + param_size) / 4;
+
+  if (cum->regs_used + param_size > NUM_ARG_REGS)
+    {
+      cum->regs_used = NUM_ARG_REGS;
+    }
+  else
+    {
+      cum->regs_used += param_size;
+    }
+
+  return;
+}
+
+int
+nios2_function_arg_padding_upward (enum machine_mode mode, tree type)
+{
+  /* On little-endian targets, the first byte of every stack argument
+     is passed in the first byte of the stack slot.  */
+  if (!BYTES_BIG_ENDIAN)
+    return 1;
+
+  /* Otherwise, integral types are padded downward: the last byte of a
+     stack argument is passed in the last byte of the stack slot.  */
+  if (type != 0
+      ? INTEGRAL_TYPE_P (type) || POINTER_TYPE_P (type)
+      : GET_MODE_CLASS (mode) == MODE_INT)
+    return 0;
+
+  /* Arguments smaller than a stack slot are padded downward.  */
+  if (mode != BLKmode)
+    return (GET_MODE_BITSIZE (mode) >= PARM_BOUNDARY) ? 1 : 0;
+  else
+    return ((int_size_in_bytes (type) >= (PARM_BOUNDARY / BITS_PER_UNIT))
+            ? 1 : 0);
+}
+
+int
+nios2_block_reg_padding_upward (enum machine_mode mode, tree type,
+                         int first ATTRIBUTE_UNUSED)
+{
+  /* ??? Do we need to treat floating point specially, ala MIPS? */
+  return nios2_function_arg_padding_upward (mode, type);
+}
 
 int
 nios2_return_in_memory (tree type)
@@ -1996,59 +3034,19 @@ enum nios2_builtins
   NIOS2_BUILTIN_RDCTL,
   NIOS2_BUILTIN_WRCTL,
 
-  NIOS2_BUILTIN_CUSTOM_N,
-  NIOS2_BUILTIN_CUSTOM_NI,
-  NIOS2_BUILTIN_CUSTOM_NF,
-  NIOS2_BUILTIN_CUSTOM_NP,
-  NIOS2_BUILTIN_CUSTOM_NII,
-  NIOS2_BUILTIN_CUSTOM_NIF,
-  NIOS2_BUILTIN_CUSTOM_NIP,
-  NIOS2_BUILTIN_CUSTOM_NFI,
-  NIOS2_BUILTIN_CUSTOM_NFF,
-  NIOS2_BUILTIN_CUSTOM_NFP,
-  NIOS2_BUILTIN_CUSTOM_NPI,
-  NIOS2_BUILTIN_CUSTOM_NPF,
-  NIOS2_BUILTIN_CUSTOM_NPP,
-  NIOS2_BUILTIN_CUSTOM_IN,
-  NIOS2_BUILTIN_CUSTOM_INI,
-  NIOS2_BUILTIN_CUSTOM_INF,
-  NIOS2_BUILTIN_CUSTOM_INP,
-  NIOS2_BUILTIN_CUSTOM_INII,
-  NIOS2_BUILTIN_CUSTOM_INIF,
-  NIOS2_BUILTIN_CUSTOM_INIP,
-  NIOS2_BUILTIN_CUSTOM_INFI,
-  NIOS2_BUILTIN_CUSTOM_INFF,
-  NIOS2_BUILTIN_CUSTOM_INFP,
-  NIOS2_BUILTIN_CUSTOM_INPI,
-  NIOS2_BUILTIN_CUSTOM_INPF,
-  NIOS2_BUILTIN_CUSTOM_INPP,
-  NIOS2_BUILTIN_CUSTOM_FN,
-  NIOS2_BUILTIN_CUSTOM_FNI,
-  NIOS2_BUILTIN_CUSTOM_FNF,
-  NIOS2_BUILTIN_CUSTOM_FNP,
-  NIOS2_BUILTIN_CUSTOM_FNII,
-  NIOS2_BUILTIN_CUSTOM_FNIF,
-  NIOS2_BUILTIN_CUSTOM_FNIP,
-  NIOS2_BUILTIN_CUSTOM_FNFI,
-  NIOS2_BUILTIN_CUSTOM_FNFF,
-  NIOS2_BUILTIN_CUSTOM_FNFP,
-  NIOS2_BUILTIN_CUSTOM_FNPI,
-  NIOS2_BUILTIN_CUSTOM_FNPF,
-  NIOS2_BUILTIN_CUSTOM_FNPP,
-  NIOS2_BUILTIN_CUSTOM_PN,
-  NIOS2_BUILTIN_CUSTOM_PNI,
-  NIOS2_BUILTIN_CUSTOM_PNF,
-  NIOS2_BUILTIN_CUSTOM_PNP,
-  NIOS2_BUILTIN_CUSTOM_PNII,
-  NIOS2_BUILTIN_CUSTOM_PNIF,
-  NIOS2_BUILTIN_CUSTOM_PNIP,
-  NIOS2_BUILTIN_CUSTOM_PNFI,
-  NIOS2_BUILTIN_CUSTOM_PNFF,
-  NIOS2_BUILTIN_CUSTOM_PNFP,
-  NIOS2_BUILTIN_CUSTOM_PNPI,
-  NIOS2_BUILTIN_CUSTOM_PNPF,
-  NIOS2_BUILTIN_CUSTOM_PNPP,
+#undef NIOS2_DO_BUILTIN
+#define NIOS2_DO_BUILTIN(upper, lower, handler) \
+  NIOS2_CONCAT (NIOS2_BUILTIN_CUSTOM_, upper),
+NIOS2_FOR_ALL_CUSTOM_BUILTINS
 
+  NIOS2_FIRST_FPU_INSN,
+
+#undef NIOS2_FPU_INSN
+#define NIOS2_FPU_INSN(opt, insn, args) \
+  NIOS2_CONCAT (NIOS2_BUILTIN_FPU_, opt),
+NIOS2_FOR_ALL_FPU_INSNS
+
+  NIOS2_LAST_FPU_INSN,
 
   LIM_NIOS2_BUILTINS
 };
@@ -2059,8 +3057,8 @@ struct builtin_description
     const char *const name;
     const enum nios2_builtins code;
     const tree *type;
-    rtx (* expander) PARAMS ((const struct builtin_description *,
-                              tree, rtx, rtx, enum machine_mode, int));
+    rtx (* expander) (const struct builtin_description *,
+                      tree, rtx, rtx, enum machine_mode, int);
 };
 
 static rtx nios2_expand_STXIO (const struct builtin_description *, 
@@ -2087,6 +3085,45 @@ static rtx nios2_expand_custom_nXX (const struct builtin_description *,
 static rtx nios2_expand_custom_XnXX (const struct builtin_description *, 
                                      tree, rtx, rtx, enum machine_mode, int);
 
+static rtx nios2_expand_custom_zdz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_zsz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_szz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_sss (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_ssz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_iss (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_ddd (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_ddz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_idd (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_siz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_suz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_diz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_duz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_isz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_usz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_idz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_udz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_dsz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+static rtx nios2_expand_custom_sdz (const struct builtin_description *,
+                                    tree, rtx, rtx, enum machine_mode, int);
+
 static tree endlink;
 
 /* int fn (volatile const void *)
@@ -2109,59 +3146,30 @@ static tree void_ftype_volatile_void_p_int;
  */
 static tree void_ftype_void;
 
-static tree custom_n;
-static tree custom_ni;
-static tree custom_nf;
-static tree custom_np;
-static tree custom_nii;
-static tree custom_nif;
-static tree custom_nip;
-static tree custom_nfi;
-static tree custom_nff;
-static tree custom_nfp;
-static tree custom_npi;
-static tree custom_npf;
-static tree custom_npp;
-static tree custom_in;
-static tree custom_ini;
-static tree custom_inf;
-static tree custom_inp;
-static tree custom_inii;
-static tree custom_inif;
-static tree custom_inip;
-static tree custom_infi;
-static tree custom_inff;
-static tree custom_infp;
-static tree custom_inpi;
-static tree custom_inpf;
-static tree custom_inpp;
-static tree custom_fn;
-static tree custom_fni;
-static tree custom_fnf;
-static tree custom_fnp;
-static tree custom_fnii;
-static tree custom_fnif;
-static tree custom_fnip;
-static tree custom_fnfi;
-static tree custom_fnff;
-static tree custom_fnfp;
-static tree custom_fnpi;
-static tree custom_fnpf;
-static tree custom_fnpp;
-static tree custom_pn;
-static tree custom_pni;
-static tree custom_pnf;
-static tree custom_pnp;
-static tree custom_pnii;
-static tree custom_pnif;
-static tree custom_pnip;
-static tree custom_pnfi;
-static tree custom_pnff;
-static tree custom_pnfp;
-static tree custom_pnpi;
-static tree custom_pnpf;
-static tree custom_pnpp;
+#undef NIOS2_DO_BUILTIN
+#define NIOS2_DO_BUILTIN(upper, lower, handler) \
+  static tree NIOS2_CONCAT (custom_, lower);
+NIOS2_FOR_ALL_CUSTOM_BUILTINS
 
+static tree custom_zdz;
+static tree custom_zsz;
+static tree custom_szz;
+static tree custom_sss;
+static tree custom_ssz;
+static tree custom_iss;
+static tree custom_ddd;
+static tree custom_ddz;
+static tree custom_idd;
+static tree custom_siz;
+static tree custom_suz;
+static tree custom_diz;
+static tree custom_duz;
+static tree custom_isz;
+static tree custom_usz;
+static tree custom_idz;
+static tree custom_udz;
+static tree custom_dsz;
+static tree custom_sdz;
 
 static const struct builtin_description bdesc[] = {
     {CODE_FOR_ldbio, "__builtin_ldbio", NIOS2_BUILTIN_LDBIO, &int_ftype_volatile_const_void_p, nios2_expand_LDXIO},
@@ -2178,59 +3186,23 @@ static const struct builtin_description bdesc[] = {
     {CODE_FOR_rdctl, "__builtin_rdctl", NIOS2_BUILTIN_RDCTL, &int_ftype_int, nios2_expand_rdctl},
     {CODE_FOR_wrctl, "__builtin_wrctl", NIOS2_BUILTIN_WRCTL, &void_ftype_int_int, nios2_expand_wrctl},
 
-    {CODE_FOR_custom_n, "__builtin_custom_n", NIOS2_BUILTIN_CUSTOM_N, &custom_n, nios2_expand_custom_n},
-    {CODE_FOR_custom_ni, "__builtin_custom_ni", NIOS2_BUILTIN_CUSTOM_NI, &custom_ni, nios2_expand_custom_nX},
-    {CODE_FOR_custom_nf, "__builtin_custom_nf", NIOS2_BUILTIN_CUSTOM_NF, &custom_nf, nios2_expand_custom_nX},
-    {CODE_FOR_custom_np, "__builtin_custom_np", NIOS2_BUILTIN_CUSTOM_NP, &custom_np, nios2_expand_custom_nX},
-    {CODE_FOR_custom_nii, "__builtin_custom_nii", NIOS2_BUILTIN_CUSTOM_NII, &custom_nii, nios2_expand_custom_nXX},
-    {CODE_FOR_custom_nif, "__builtin_custom_nif", NIOS2_BUILTIN_CUSTOM_NIF, &custom_nif, nios2_expand_custom_nXX},
-    {CODE_FOR_custom_nip, "__builtin_custom_nip", NIOS2_BUILTIN_CUSTOM_NIP, &custom_nip, nios2_expand_custom_nXX},
-    {CODE_FOR_custom_nfi, "__builtin_custom_nfi", NIOS2_BUILTIN_CUSTOM_NFI, &custom_nfi, nios2_expand_custom_nXX},
-    {CODE_FOR_custom_nff, "__builtin_custom_nff", NIOS2_BUILTIN_CUSTOM_NFF, &custom_nff, nios2_expand_custom_nXX},
-    {CODE_FOR_custom_nfp, "__builtin_custom_nfp", NIOS2_BUILTIN_CUSTOM_NFP, &custom_nfp, nios2_expand_custom_nXX},
-    {CODE_FOR_custom_npi, "__builtin_custom_npi", NIOS2_BUILTIN_CUSTOM_NPI, &custom_npi, nios2_expand_custom_nXX},
-    {CODE_FOR_custom_npf, "__builtin_custom_npf", NIOS2_BUILTIN_CUSTOM_NPF, &custom_npf, nios2_expand_custom_nXX},
-    {CODE_FOR_custom_npp, "__builtin_custom_npp", NIOS2_BUILTIN_CUSTOM_NPP, &custom_npp, nios2_expand_custom_nXX},
-    {CODE_FOR_custom_in, "__builtin_custom_in", NIOS2_BUILTIN_CUSTOM_IN, &custom_in, nios2_expand_custom_Xn},
-    {CODE_FOR_custom_ini, "__builtin_custom_ini", NIOS2_BUILTIN_CUSTOM_INI, &custom_ini, nios2_expand_custom_XnX},
-    {CODE_FOR_custom_inf, "__builtin_custom_inf", NIOS2_BUILTIN_CUSTOM_INF, &custom_inf, nios2_expand_custom_XnX},
-    {CODE_FOR_custom_inp, "__builtin_custom_inp", NIOS2_BUILTIN_CUSTOM_INP, &custom_inp, nios2_expand_custom_XnX},
-    {CODE_FOR_custom_inii, "__builtin_custom_inii", NIOS2_BUILTIN_CUSTOM_INII, &custom_inii, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_inif, "__builtin_custom_inif", NIOS2_BUILTIN_CUSTOM_INIF, &custom_inif, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_inip, "__builtin_custom_inip", NIOS2_BUILTIN_CUSTOM_INIP, &custom_inip, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_infi, "__builtin_custom_infi", NIOS2_BUILTIN_CUSTOM_INFI, &custom_infi, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_inff, "__builtin_custom_inff", NIOS2_BUILTIN_CUSTOM_INFF, &custom_inff, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_infp, "__builtin_custom_infp", NIOS2_BUILTIN_CUSTOM_INFP, &custom_infp, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_inpi, "__builtin_custom_inpi", NIOS2_BUILTIN_CUSTOM_INPI, &custom_inpi, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_inpf, "__builtin_custom_inpf", NIOS2_BUILTIN_CUSTOM_INPF, &custom_inpf, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_inpp, "__builtin_custom_inpp", NIOS2_BUILTIN_CUSTOM_INPP, &custom_inpp, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_fn, "__builtin_custom_fn", NIOS2_BUILTIN_CUSTOM_FN, &custom_fn, nios2_expand_custom_Xn},
-    {CODE_FOR_custom_fni, "__builtin_custom_fni", NIOS2_BUILTIN_CUSTOM_FNI, &custom_fni, nios2_expand_custom_XnX},
-    {CODE_FOR_custom_fnf, "__builtin_custom_fnf", NIOS2_BUILTIN_CUSTOM_FNF, &custom_fnf, nios2_expand_custom_XnX},
-    {CODE_FOR_custom_fnp, "__builtin_custom_fnp", NIOS2_BUILTIN_CUSTOM_FNP, &custom_fnp, nios2_expand_custom_XnX},
-    {CODE_FOR_custom_fnii, "__builtin_custom_fnii", NIOS2_BUILTIN_CUSTOM_FNII, &custom_fnii, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_fnif, "__builtin_custom_fnif", NIOS2_BUILTIN_CUSTOM_FNIF, &custom_fnif, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_fnip, "__builtin_custom_fnip", NIOS2_BUILTIN_CUSTOM_FNIP, &custom_fnip, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_fnfi, "__builtin_custom_fnfi", NIOS2_BUILTIN_CUSTOM_FNFI, &custom_fnfi, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_fnff, "__builtin_custom_fnff", NIOS2_BUILTIN_CUSTOM_FNFF, &custom_fnff, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_fnfp, "__builtin_custom_fnfp", NIOS2_BUILTIN_CUSTOM_FNFP, &custom_fnfp, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_fnpi, "__builtin_custom_fnpi", NIOS2_BUILTIN_CUSTOM_FNPI, &custom_fnpi, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_fnpf, "__builtin_custom_fnpf", NIOS2_BUILTIN_CUSTOM_FNPF, &custom_fnpf, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_fnpp, "__builtin_custom_fnpp", NIOS2_BUILTIN_CUSTOM_FNPP, &custom_fnpp, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_pn, "__builtin_custom_pn", NIOS2_BUILTIN_CUSTOM_PN, &custom_pn, nios2_expand_custom_Xn},
-    {CODE_FOR_custom_pni, "__builtin_custom_pni", NIOS2_BUILTIN_CUSTOM_PNI, &custom_pni, nios2_expand_custom_XnX},
-    {CODE_FOR_custom_pnf, "__builtin_custom_pnf", NIOS2_BUILTIN_CUSTOM_PNF, &custom_pnf, nios2_expand_custom_XnX},
-    {CODE_FOR_custom_pnp, "__builtin_custom_pnp", NIOS2_BUILTIN_CUSTOM_PNP, &custom_pnp, nios2_expand_custom_XnX},
-    {CODE_FOR_custom_pnii, "__builtin_custom_pnii", NIOS2_BUILTIN_CUSTOM_PNII, &custom_pnii, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_pnif, "__builtin_custom_pnif", NIOS2_BUILTIN_CUSTOM_PNIF, &custom_pnif, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_pnip, "__builtin_custom_pnip", NIOS2_BUILTIN_CUSTOM_PNIP, &custom_pnip, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_pnfi, "__builtin_custom_pnfi", NIOS2_BUILTIN_CUSTOM_PNFI, &custom_pnfi, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_pnff, "__builtin_custom_pnff", NIOS2_BUILTIN_CUSTOM_PNFF, &custom_pnff, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_pnfp, "__builtin_custom_pnfp", NIOS2_BUILTIN_CUSTOM_PNFP, &custom_pnfp, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_pnpi, "__builtin_custom_pnpi", NIOS2_BUILTIN_CUSTOM_PNPI, &custom_pnpi, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_pnpf, "__builtin_custom_pnpf", NIOS2_BUILTIN_CUSTOM_PNPF, &custom_pnpf, nios2_expand_custom_XnXX},
-    {CODE_FOR_custom_pnpp, "__builtin_custom_pnpp", NIOS2_BUILTIN_CUSTOM_PNPP, &custom_pnpp, nios2_expand_custom_XnXX},
+#undef NIOS2_DO_BUILTIN
+#define NIOS2_DO_BUILTIN(upper, lower, handler) \
+    {NIOS2_CONCAT (CODE_FOR_custom_, lower), \
+     "__builtin_custom_" NIOS2_STRINGIFY (lower), \
+     NIOS2_CONCAT (NIOS2_BUILTIN_CUSTOM_, upper), \
+     &NIOS2_CONCAT (custom_, lower), \
+     NIOS2_CONCAT (nios2_expand_custom_, handler)},
+NIOS2_FOR_ALL_CUSTOM_BUILTINS
 
+#undef NIOS2_FPU_INSN
+#define NIOS2_FPU_INSN(opt, insn, args) \
+    {NIOS2_CONCAT (CODE_FOR_, insn), \
+     "__builtin_custom_" NIOS2_STRINGIFY (opt), \
+     NIOS2_CONCAT (NIOS2_BUILTIN_FPU_, opt), \
+     &NIOS2_CONCAT (custom_, args), \
+     NIOS2_CONCAT (nios2_expand_custom_, args)},
+NIOS2_FOR_ALL_FPU_INSNS
 
     {0, 0, 0, 0, 0},
 };
@@ -2589,7 +3561,104 @@ nios2_init_builtins ()
   			     def_param (ptr_type_node)
   			     endlink))));
 
+  custom_zdz
+      = build_function_type (void_type_node,
+                             def_param (double_type_node)
+                             endlink));
 
+  custom_zsz
+      = build_function_type (void_type_node,
+                             def_param (float_type_node)
+                             endlink));
+
+  custom_szz
+      = build_function_type (float_type_node,
+                             def_param (void_type_node)
+                             endlink));
+
+  custom_sss
+      = build_function_type (float_type_node,
+                             def_param (float_type_node)
+                             def_param (float_type_node)
+                             endlink)));
+
+  custom_ssz
+      = build_function_type (float_type_node,
+                             def_param (float_type_node)
+                             endlink));
+
+  custom_iss
+      = build_function_type (integer_type_node,
+                             def_param (float_type_node)
+                             def_param (float_type_node)
+                             endlink)));
+
+  custom_ddd
+      = build_function_type (double_type_node,
+                             def_param (double_type_node)
+                             def_param (double_type_node)
+                             endlink)));
+
+  custom_ddz
+      = build_function_type (double_type_node,
+                             def_param (double_type_node)
+                             endlink));
+
+  custom_idd
+      = build_function_type (integer_type_node,
+                             def_param (double_type_node)
+                             def_param (double_type_node)
+                             endlink)));
+
+  custom_siz
+      = build_function_type (float_type_node,
+                             def_param (integer_type_node)
+                             endlink));
+
+  custom_suz
+      = build_function_type (float_type_node,
+                             def_param (unsigned_type_node)
+                             endlink));
+
+  custom_diz
+      = build_function_type (double_type_node,
+                             def_param (integer_type_node)
+                             endlink));
+
+  custom_duz
+      = build_function_type (double_type_node,
+                             def_param (unsigned_type_node)
+                             endlink));
+
+  custom_isz
+      = build_function_type (integer_type_node,
+                             def_param (float_type_node)
+                             endlink));
+
+  custom_usz
+      = build_function_type (unsigned_type_node,
+                             def_param (float_type_node)
+                             endlink));
+
+  custom_idz
+      = build_function_type (integer_type_node,
+                             def_param (double_type_node)
+                             endlink));
+
+  custom_udz
+      = build_function_type (unsigned_type_node,
+                             def_param (double_type_node)
+                             endlink));
+
+  custom_dsz
+      = build_function_type (double_type_node,
+                             def_param (float_type_node)
+                             endlink));
+
+  custom_sdz
+      = build_function_type (float_type_node,
+                             def_param (double_type_node)
+                             endlink));
 
   /* *INDENT-ON* */
 
@@ -2617,7 +3686,25 @@ nios2_expand_builtin (tree exp, rtx target, rtx subtarget,
 
   for (d = bdesc; d->name; d++)
     if (d->code == fcode)
+      {
+        if (d->code > NIOS2_FIRST_FPU_INSN && d->code < NIOS2_LAST_FPU_INSN)
+          {
+            nios2_fpu_info *inf = &nios2_fpu_insns[d->code - (NIOS2_FIRST_FPU_INSN + 1)];
+            const struct insn_data *idata = &insn_data[d->icode];
+            if (inf->N < 0)
+              {
+                fatal_error ("Cannot call `%s' without specifying switch `-mcustom-%s'",
+                       d->name,
+                       inf->option);
+              }
+            if (inf->args[0] != 'z'
+                && (!target
+                    || !(idata->operand[0].predicate) (target,
+                                                       idata->operand[0].mode)))
+              target = gen_reg_rtx (idata->operand[0].mode);
+          }
       return (d->expander) (d, exp, target, subtarget, mode, ignore);
+      }
 
   /* we should have seen one of the functins we registered */
   abort ();
@@ -2654,6 +3741,8 @@ nios2_extract_opcode (const struct builtin_description *d, int op, tree arglist)
   if (!(*insn_data[d->icode].operand[op].predicate) (opcode, mode))
     error ("Custom instruction opcode must be compile time constant in the range 0-255 for %s", d->name);
 
+  builtin_custom_seen[INTVAL (opcode)] = d->name;
+  nios2_custom_check_insns (0);
   return opcode;
 }
 
@@ -3037,6 +4126,385 @@ nios2_expand_wrctl (const struct builtin_description * d ATTRIBUTE_UNUSED,
   return 0;
 }
 
+static rtx
+nios2_extract_double (const struct insn_data *idata, tree arglist, int index)
+{
+  rtx arg;
+
+  while (index--)
+  {
+    arglist = TREE_CHAIN (arglist);
+  }
+  arg = expand_expr (TREE_VALUE (arglist), NULL_RTX, DFmode, 0);
+  arg = protect_from_queue (arg, 0);
+  if (!(*(idata->operand[index+1].predicate)) (arg, DFmode))
+    {
+      arg = copy_to_mode_reg (DFmode, arg);
+    }
+  return arg;
+}
+
+static rtx
+nios2_extract_float (const struct insn_data *idata, tree arglist, int index)
+{
+  rtx arg;
+
+  while (index--)
+  {
+    arglist = TREE_CHAIN (arglist);
+  }
+  arg = expand_expr (TREE_VALUE (arglist), NULL_RTX, SFmode, 0);
+  arg = protect_from_queue (arg, 0);
+  if (!(*(idata->operand[index+1].predicate)) (arg, SFmode))
+    {
+      arg = copy_to_mode_reg (SFmode, arg);
+    }
+  return arg;
+}
+
+static rtx
+nios2_extract_integer (const struct insn_data *idata, tree arglist, int index)
+{
+  rtx arg;
+
+  while (index--)
+  {
+    arglist = TREE_CHAIN (arglist);
+  }
+  arg = expand_expr (TREE_VALUE (arglist), NULL_RTX, SImode, 0);
+  arg = protect_from_queue (arg, 0);
+  if (!(*(idata->operand[index+1].predicate)) (arg, SImode))
+    {
+      arg = copy_to_mode_reg (SImode, arg);
+    }
+  return protect_from_queue (arg, 0);
+}
+
+static rtx
+nios2_expand_custom_zdz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target ATTRIBUTE_UNUSED,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (nios2_extract_double (&insn_data[d->icode],
+                                                      arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return 0;
+}
+
+static rtx
+nios2_expand_custom_zsz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target ATTRIBUTE_UNUSED,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (nios2_extract_float (&insn_data[d->icode],
+                                                     arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return 0;
+}
+
+static rtx
+nios2_expand_custom_szz (const struct builtin_description *d,
+                         tree exp ATTRIBUTE_UNUSED,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  rtx pat = GEN_FCN (d->icode) (target);
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_sss (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_float (&insn_data[d->icode],
+                                                     arglist, 0),
+                                nios2_extract_float (&insn_data[d->icode],
+                                                     arglist, 1));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_ssz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_float (&insn_data[d->icode],
+                                                     arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_iss (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_float (&insn_data[d->icode],
+                                                     arglist, 0),
+                                nios2_extract_float (&insn_data[d->icode],
+                                                     arglist, 1));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_ddd (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_double (&insn_data[d->icode],
+                                                      arglist, 0),
+                                nios2_extract_double (&insn_data[d->icode],
+                                                      arglist, 1));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_ddz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_double (&insn_data[d->icode],
+                                                      arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_idd (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_double (&insn_data[d->icode],
+                                                      arglist, 0),
+                                nios2_extract_double (&insn_data[d->icode],
+                                                      arglist, 1));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_siz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_integer (&insn_data[d->icode],
+                                                       arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_suz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_integer (&insn_data[d->icode],
+                                                       arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_diz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_integer (&insn_data[d->icode],
+                                                       arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_duz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_integer (&insn_data[d->icode],
+                                                       arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_isz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_float (&insn_data[d->icode],
+                                                     arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_usz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_float (&insn_data[d->icode],
+                                                     arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_idz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_double (&insn_data[d->icode],
+                                                      arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_udz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_double (&insn_data[d->icode],
+                                                      arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_dsz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_float (&insn_data[d->icode],
+                                                     arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
+
+static rtx
+nios2_expand_custom_sdz (const struct builtin_description *d,
+                         tree exp,
+                         rtx target,
+                         rtx subtarget ATTRIBUTE_UNUSED,
+                         enum machine_mode mode ATTRIBUTE_UNUSED,
+                         int ignore ATTRIBUTE_UNUSED)
+{
+  tree arglist = TREE_OPERAND (exp, 1);
+  rtx pat = GEN_FCN (d->icode) (target,
+                                nios2_extract_double (&insn_data[d->icode],
+                                                      arglist, 0));
+  if (pat)
+    emit_insn (pat);
+  return target;
+}
 
 #include "gt-nios2.h"
 
