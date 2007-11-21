@@ -1175,10 +1175,7 @@ gen_compare (enum rtx_code code, rtx x, rtx y, int need_compare)
 	y = force_reg (GET_MODE (x), y);
       else
 	{
-	  int ok_const =
-	    (code == LTU || code == LEU || code == GTU || code == GEU)
-	    ? uint16_operand (y, GET_MODE (y))
-	    : reg_or_cmp_int16_operand (y, GET_MODE (y));
+	  int ok_const = reg_or_int16_operand (y, GET_MODE (y));
 	  
 	  if (! ok_const)
 	    y = force_reg (GET_MODE (x), y);
@@ -1909,7 +1906,7 @@ m32r_reload_lr (rtx sp, int size)
 
   if (size == 0)
     emit_insn (gen_movsi (lr, gen_rtx_MEM (Pmode, sp)));
-  else if (size <= 32768)
+  else if (size < 32768)
     emit_insn (gen_movsi (lr, gen_rtx_MEM (Pmode,
 					   gen_rtx_PLUS (Pmode, sp,
 							 GEN_INT (size)))));
@@ -2753,6 +2750,29 @@ m32r_not_same_reg (rtx a, rtx b)
 }
 
 
+rtx
+m32r_function_symbol (const char *name)
+{
+  int extra_flags = 0;
+  enum m32r_model model;
+  rtx sym = gen_rtx_SYMBOL_REF (Pmode, name);
+
+  if (TARGET_MODEL_SMALL)
+    model = M32R_MODEL_SMALL;
+  else if (TARGET_MODEL_MEDIUM)
+    model = M32R_MODEL_MEDIUM;
+  else if (TARGET_MODEL_LARGE)
+    model = M32R_MODEL_LARGE;
+  else
+    abort (); /* shouldn't happen */
+  extra_flags |= model << SYMBOL_FLAG_MODEL_SHIFT;
+                                                                                
+  if (extra_flags)
+    SYMBOL_REF_FLAGS (sym) |= extra_flags;
+
+  return sym;
+}
+
 /* Use a library function to move some bytes.  */
 
 static void
@@ -2765,13 +2785,13 @@ block_move_call (rtx dest_reg, rtx src_reg, rtx bytes_rtx)
     bytes_rtx = convert_to_mode (Pmode, bytes_rtx, 1);
 
 #ifdef TARGET_MEM_FUNCTIONS
-  emit_library_call (gen_rtx (SYMBOL_REF, Pmode, "memcpy"), 0,
+  emit_library_call (m32r_function_symbol ("memcpy"), 0,
 		     VOIDmode, 3, dest_reg, Pmode, src_reg, Pmode,
 		     convert_to_mode (TYPE_MODE (sizetype), bytes_rtx,
 				      TREE_UNSIGNED (sizetype)),
 		     TYPE_MODE (sizetype));
 #else
-  emit_library_call (gen_rtx (SYMBOL_REF, Pmode, "bcopy"), 0,
+  emit_library_call (m32r_function_symbol ("bcopy"), 0,
 		     VOIDmode, 3, src_reg, Pmode, dest_reg, Pmode,
 		     convert_to_mode (TYPE_MODE (integer_type_node), bytes_rtx,
 				      TREE_UNSIGNED (integer_type_node)),
@@ -2793,7 +2813,7 @@ block_move_call (rtx dest_reg, rtx src_reg, rtx bytes_rtx)
    operands[2] is the number of bytes to move.
    operands[3] is the alignment.  */
 
-void
+int
 m32r_expand_block_move (rtx operands[])
 {
   rtx           orig_dst  = operands[0];
@@ -2808,7 +2828,7 @@ m32r_expand_block_move (rtx operands[])
   rtx           dst_reg;
 
   if (constp && bytes <= 0)
-    return;
+    return 1;
 
   /* Move the address into scratch registers.  */
   dst_reg = copy_addr_to_reg (XEXP (orig_dst, 0));
@@ -2823,7 +2843,7 @@ m32r_expand_block_move (rtx operands[])
   if (optimize_size || ! constp || align != UNITS_PER_WORD)
     {
       block_move_call (dst_reg, src_reg, bytes_rtx);
-      return;
+      return 0;
     }
 
   leftover = bytes % MAX_MOVE_BYTES;
@@ -2880,6 +2900,7 @@ m32r_expand_block_move (rtx operands[])
     emit_insn (gen_movstrsi_internal (dst_reg, src_reg, GEN_INT (leftover),
 				      gen_reg_rtx (SImode),
 				      gen_reg_rtx (SImode)));
+    return 1;
 }
 
 

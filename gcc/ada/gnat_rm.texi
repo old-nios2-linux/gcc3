@@ -63,8 +63,8 @@ GNAT Reference Manual
 @noindent
 GNAT, The GNU Ada 95 Compiler@*
 Version @value{gnat_version}@*
-Document revision level $Revision: 1.13.16.1 $@*
-Date: $Date: 2004/06/09 09:20:43 $
+Document revision level $Revision: 1.381 $@*
+Date: $Date: 2004/01/05 19:49:12 $
 
 @noindent
 Ada Core Technologies, Inc.

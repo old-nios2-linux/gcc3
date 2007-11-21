@@ -187,6 +187,8 @@ static bool sparc_function_ok_for_sibcall (tree, tree);
 static void sparc_init_libfuncs (void);
 static void sparc_output_mi_thunk (FILE *, tree, HOST_WIDE_INT,
 				   HOST_WIDE_INT, tree);
+static bool sparc_can_output_mi_thunk (tree, HOST_WIDE_INT,
+				       HOST_WIDE_INT, tree);
 static struct machine_function * sparc_init_machine_status (void);
 static bool sparc_cannot_force_const_mem (rtx);
 static rtx sparc_tls_get_addr (void);
@@ -270,7 +272,7 @@ enum processor_type sparc_cpu;
 #undef TARGET_ASM_OUTPUT_MI_THUNK
 #define TARGET_ASM_OUTPUT_MI_THUNK sparc_output_mi_thunk
 #undef TARGET_ASM_CAN_OUTPUT_MI_THUNK
-#define TARGET_ASM_CAN_OUTPUT_MI_THUNK default_can_output_mi_thunk_no_vcall
+#define TARGET_ASM_CAN_OUTPUT_MI_THUNK sparc_can_output_mi_thunk
 
 #undef TARGET_RTX_COSTS
 #define TARGET_RTX_COSTS sparc_rtx_costs
@@ -1315,23 +1317,7 @@ input_operand (rtx op, enum machine_mode mode)
 
   /* Check for valid MEM forms.  */
   if (GET_CODE (op) == MEM)
-    {
-      rtx inside = XEXP (op, 0);
-
-      if (GET_CODE (inside) == LO_SUM)
-	{
-	  /* We can't allow these because all of the splits
-	     (eventually as they trickle down into DFmode
-	     splits) require offsettable memory references.  */
-	  if (! TARGET_V9
-	      && GET_MODE (op) == TFmode)
-	    return 0;
-
-	  return (register_operand (XEXP (inside, 0), Pmode)
-		  && CONSTANT_P (XEXP (inside, 1)));
-	}
-      return memory_address_p (mode, inside);
-    }
+    return memory_address_p (mode, XEXP (op, 0));
 
   return 0;
 }
@@ -1420,18 +1406,25 @@ sparc_emit_set_const32 (rtx op0, rtx op1)
 }
 
 
-/* SPARC-v9 code-model support.  */
-void
-sparc_emit_set_symbolic_const64 (rtx op0, rtx op1, rtx temp1)
-{
-  rtx ti_temp1 = 0;
+/* Load OP1, a symbolic 64-bit constant, into OP0, a DImode register.
+   If TEMP is non-zero, we are forbidden to use any other scratch
+   registers.  Otherwise, we are allowed to generate them as needed.
 
-  if (temp1 && GET_MODE (temp1) == TImode)
+   Note that TEMP may have TImode if the code model is TARGET_CM_MEDANY
+   or TARGET_CM_EMBMEDANY (see the reload_indi and reload_outdi patterns).  */
+void
+sparc_emit_set_symbolic_const64 (rtx op0, rtx op1, rtx temp)
+{
+  rtx temp1, temp2, temp3, temp4, temp5;
+  rtx ti_temp = 0;
+
+  if (temp && GET_MODE (temp) == TImode)
     {
-      ti_temp1 = temp1;
-      temp1 = gen_rtx_REG (DImode, REGNO (temp1));
+      ti_temp = temp;
+      temp = gen_rtx_REG (DImode, REGNO (temp));
     }
 
+  /* SPARC-V9 code-model support.  */
   switch (sparc_cmodel)
     {
     case CM_MEDLOW:
@@ -1443,8 +1436,13 @@ sparc_emit_set_symbolic_const64 (rtx op0, rtx op1, rtx temp1)
 	 The executable must be in the low 4TB of the virtual address
 	 space.
 
-	 sethi	%hi(symbol), %temp
-	 or	%temp, %lo(symbol), %reg  */
+	 sethi	%hi(symbol), %temp1
+	 or	%temp1, %lo(symbol), %reg  */
+      if (temp)
+	temp1 = temp;  /* op0 is allowed.  */
+      else
+	temp1 = gen_reg_rtx (DImode);
+
       emit_insn (gen_rtx_SET (VOIDmode, temp1, gen_rtx_HIGH (DImode, op1)));
       emit_insn (gen_rtx_SET (VOIDmode, op0, gen_rtx_LO_SUM (DImode, temp1, op1)));
       break;
@@ -1462,11 +1460,24 @@ sparc_emit_set_symbolic_const64 (rtx op0, rtx op1, rtx temp1)
 	 or	%temp1, %m44(symbol), %temp2
 	 sllx	%temp2, 12, %temp3
 	 or	%temp3, %l44(symbol), %reg  */
-      emit_insn (gen_seth44 (op0, op1));
-      emit_insn (gen_setm44 (op0, op0, op1));
-      emit_insn (gen_rtx_SET (VOIDmode, temp1,
-			      gen_rtx_ASHIFT (DImode, op0, GEN_INT (12))));
-      emit_insn (gen_setl44 (op0, temp1, op1));
+      if (temp)
+	{
+	  temp1 = op0;
+	  temp2 = op0;
+	  temp3 = temp;  /* op0 is allowed.  */
+	}
+      else
+	{
+	  temp1 = gen_reg_rtx (DImode);
+	  temp2 = gen_reg_rtx (DImode);
+	  temp3 = gen_reg_rtx (DImode);
+	}
+
+      emit_insn (gen_seth44 (temp1, op1));
+      emit_insn (gen_setm44 (temp2, temp1, op1));
+      emit_insn (gen_rtx_SET (VOIDmode, temp3,
+			      gen_rtx_ASHIFT (DImode, temp2, GEN_INT (12))));
+      emit_insn (gen_setl44 (op0, temp3, op1));
       break;
 
     case CM_MEDANY:
@@ -1481,29 +1492,44 @@ sparc_emit_set_symbolic_const64 (rtx op0, rtx op1, rtx temp1)
 	 sethi	%hh(symbol), %temp1
 	 sethi	%lm(symbol), %temp2
 	 or	%temp1, %hm(symbol), %temp3
-	 or	%temp2, %lo(symbol), %temp4
-	 sllx	%temp3, 32, %temp5
-	 or	%temp4, %temp5, %reg  */
-
-      /* It is possible that one of the registers we got for operands[2]
-	 might coincide with that of operands[0] (which is why we made
-	 it TImode).  Pick the other one to use as our scratch.  */
-      if (rtx_equal_p (temp1, op0))
+	 sllx	%temp3, 32, %temp4
+	 or	%temp4, %temp2, %temp5
+	 or	%temp5, %lo(symbol), %reg  */
+      if (temp)
 	{
-	  if (ti_temp1)
-	    temp1 = gen_rtx_REG (DImode, REGNO (temp1) + 1);
-	  else
-	    abort();
+	  /* It is possible that one of the registers we got for operands[2]
+	     might coincide with that of operands[0] (which is why we made
+	     it TImode).  Pick the other one to use as our scratch.  */
+	  if (rtx_equal_p (temp, op0))
+	    {
+	      if (ti_temp)
+		temp = gen_rtx_REG (DImode, REGNO (temp) + 1);
+	      else
+		abort();
+	    }
+	  temp1 = op0;
+	  temp2 = temp;  /* op0 is _not_ allowed, see above.  */
+	  temp3 = op0;
+	  temp4 = op0;
+	  temp5 = op0;
+	}
+      else
+	{
+	  temp1 = gen_reg_rtx (DImode);
+	  temp2 = gen_reg_rtx (DImode);
+	  temp3 = gen_reg_rtx (DImode);
+	  temp4 = gen_reg_rtx (DImode);
+	  temp5 = gen_reg_rtx (DImode);
 	}
 
-      emit_insn (gen_sethh (op0, op1));
-      emit_insn (gen_setlm (temp1, op1));
-      emit_insn (gen_sethm (op0, op0, op1));
-      emit_insn (gen_rtx_SET (VOIDmode, op0,
-			      gen_rtx_ASHIFT (DImode, op0, GEN_INT (32))));
-      emit_insn (gen_rtx_SET (VOIDmode, op0,
-			      gen_rtx_PLUS (DImode, op0, temp1)));
-      emit_insn (gen_setlo (op0, op0, op1));
+      emit_insn (gen_sethh (temp1, op1));
+      emit_insn (gen_setlm (temp2, op1));
+      emit_insn (gen_sethm (temp3, temp1, op1));
+      emit_insn (gen_rtx_SET (VOIDmode, temp4,
+			      gen_rtx_ASHIFT (DImode, temp3, GEN_INT (32))));
+      emit_insn (gen_rtx_SET (VOIDmode, temp5,
+			      gen_rtx_PLUS (DImode, temp4, temp2)));
+      emit_insn (gen_setlo (op0, temp5, op1));
       break;
 
     case CM_EMBMEDANY:
@@ -1515,42 +1541,69 @@ sparc_emit_set_symbolic_const64 (rtx op0, rtx op1, rtx temp1)
 	 look different.
 
 	 Data segment:	sethi	%hi(symbol), %temp1
-			or	%temp1, %lo(symbol), %temp2
-			add	%temp2, EMBMEDANY_BASE_REG, %reg
-
-	 Text segment:	sethi	%uhi(symbol), %temp1
-			sethi	%hi(symbol), %temp2
-			or	%temp1, %ulo(symbol), %temp3
-			or	%temp2, %lo(symbol), %temp4
-			sllx	%temp3, 32, %temp5
-			or	%temp4, %temp5, %reg  */
+			add	%temp1, EMBMEDANY_BASE_REG, %temp2
+			or	%temp2, %lo(symbol), %reg  */
       if (data_segment_operand (op1, GET_MODE (op1)))
 	{
-	  emit_insn (gen_embmedany_sethi (temp1, op1));
-	  emit_insn (gen_embmedany_brsum (op0, temp1));
-	  emit_insn (gen_embmedany_losum (op0, op0, op1));
-	}
-      else
-	{
-	  /* It is possible that one of the registers we got for operands[2]
-	     might coincide with that of operands[0] (which is why we made
-	     it TImode).  Pick the other one to use as our scratch.  */
-	  if (rtx_equal_p (temp1, op0))
+	  if (temp)
 	    {
-	      if (ti_temp1)
-		temp1 = gen_rtx_REG (DImode, REGNO (temp1) + 1);
-	      else
-		abort();
+	      temp1 = temp;  /* op0 is allowed.  */
+	      temp2 = op0;
+	    }
+	  else
+	    {
+	      temp1 = gen_reg_rtx (DImode);
+	      temp2 = gen_reg_rtx (DImode);
 	    }
 
-	  emit_insn (gen_embmedany_textuhi (op0, op1));
-	  emit_insn (gen_embmedany_texthi  (temp1, op1));
-	  emit_insn (gen_embmedany_textulo (op0, op0, op1));
-	  emit_insn (gen_rtx_SET (VOIDmode, op0,
-				  gen_rtx_ASHIFT (DImode, op0, GEN_INT (32))));
-	  emit_insn (gen_rtx_SET (VOIDmode, op0,
-				  gen_rtx_PLUS (DImode, op0, temp1)));
-	  emit_insn (gen_embmedany_textlo  (op0, op0, op1));
+	  emit_insn (gen_embmedany_sethi (temp1, op1));
+	  emit_insn (gen_embmedany_brsum (temp2, temp1));
+	  emit_insn (gen_embmedany_losum (op0, temp2, op1));
+	}
+
+      /* Text segment:	sethi	%uhi(symbol), %temp1
+			sethi	%hi(symbol), %temp2
+			or	%temp1, %ulo(symbol), %temp3
+			sllx	%temp3, 32, %temp4
+			or	%temp4, %temp2, %temp5
+			or	%temp5, %lo(symbol), %reg  */
+      else
+	{
+	  if (temp)
+	    {
+	      /* It is possible that one of the registers we got for operands[2]
+		 might coincide with that of operands[0] (which is why we made
+		 it TImode).  Pick the other one to use as our scratch.  */
+	      if (rtx_equal_p (temp, op0))
+		{
+		  if (ti_temp)
+		    temp = gen_rtx_REG (DImode, REGNO (temp) + 1);
+		  else
+		    abort();
+		}
+	      temp1 = op0;
+	      temp2 = temp;  /* op0 is _not_ allowed, see above.  */
+	      temp3 = op0;
+	      temp4 = op0;
+	      temp5 = op0;
+	    }
+	  else
+	    {
+	      temp1 = gen_reg_rtx (DImode);
+	      temp2 = gen_reg_rtx (DImode);
+	      temp3 = gen_reg_rtx (DImode);
+	      temp4 = gen_reg_rtx (DImode);
+	      temp5 = gen_reg_rtx (DImode);
+	    }
+
+	  emit_insn (gen_embmedany_textuhi (temp1, op1));
+	  emit_insn (gen_embmedany_texthi  (temp2, op1));
+	  emit_insn (gen_embmedany_textulo (temp3, temp1, op1));
+	  emit_insn (gen_rtx_SET (VOIDmode, temp4,
+				  gen_rtx_ASHIFT (DImode, temp3, GEN_INT (32))));
+	  emit_insn (gen_rtx_SET (VOIDmode, temp5,
+				  gen_rtx_PLUS (DImode, temp4, temp2)));
+	  emit_insn (gen_embmedany_textlo  (op0, temp5, op1));
 	}
       break;
 
@@ -1930,7 +1983,7 @@ sparc_emit_set_const64 (rtx op0, rtx op1)
   unsigned HOST_WIDE_INT high_bits, low_bits;
   int lowest_bit_set, highest_bit_set;
   int all_bits_between_are_set;
-  rtx temp;
+  rtx temp = 0;
 
   /* Sanity check that we know what we are working with.  */
   if (! TARGET_ARCH64)
@@ -1946,8 +1999,6 @@ sparc_emit_set_const64 (rtx op0, rtx op1)
 
   if (reload_in_progress || reload_completed)
     temp = op0;
-  else
-    temp = gen_reg_rtx (DImode);
 
   if (GET_CODE (op1) != CONST_DOUBLE
       && GET_CODE (op1) != CONST_INT)
@@ -1955,6 +2006,9 @@ sparc_emit_set_const64 (rtx op0, rtx op1)
       sparc_emit_set_symbolic_const64 (op0, op1, temp);
       return;
     }
+
+  if (! temp)
+    temp = gen_reg_rtx (DImode);
 
   if (GET_CODE (op1) == CONST_DOUBLE)
     {
@@ -2892,26 +2946,34 @@ eligible_for_epilogue_delay (rtx trial, int slot)
 int
 tls_call_delay (rtx trial)
 {
-  rtx pat, unspec;
+  rtx pat;
 
   /* Binutils allows
-     call __tls_get_addr, %tgd_call (foo)
-      add %l7, %o0, %o0, %tgd_add (foo)
+       call __tls_get_addr, %tgd_call (foo)
+        add %l7, %o0, %o0, %tgd_add (foo)
      while Sun as/ld does not.  */
   if (TARGET_GNU_TLS || !TARGET_TLS)
     return 1;
 
   pat = PATTERN (trial);
-  if (GET_CODE (pat) != SET || GET_CODE (SET_DEST (pat)) != PLUS)
-    return 1;
 
-  unspec = XEXP (SET_DEST (pat), 1);
-  if (GET_CODE (unspec) != UNSPEC
-      || (XINT (unspec, 1) != UNSPEC_TLSGD
-	  && XINT (unspec, 1) != UNSPEC_TLSLDM))
-    return 1;
+  /* We must reject tgd_add{32|64}, i.e.
+       (set (reg) (plus (reg) (unspec [(reg) (symbol_ref)] UNSPEC_TLSGD)))
+     and tldm_add{32|64}, i.e.
+       (set (reg) (plus (reg) (unspec [(reg) (symbol_ref)] UNSPEC_TLSLDM)))
+     for Sun as/ld.  */
+  if (GET_CODE (pat) == SET
+      && GET_CODE (SET_SRC (pat)) == PLUS)
+    {
+      rtx unspec = XEXP (SET_SRC (pat), 1);
 
-  return 0;
+      if (GET_CODE (unspec) == UNSPEC
+	  && (XINT (unspec, 1) == UNSPEC_TLSGD
+	      || XINT (unspec, 1) == UNSPEC_TLSLDM))
+	return 0;
+    }
+
+  return 1;
 }
 
 /* Return nonzero if TRIAL can go into the sibling call
@@ -3266,7 +3328,7 @@ legitimate_pic_operand_p (rtx x)
 int
 legitimate_address_p (enum machine_mode mode, rtx addr, int strict)
 {
-  rtx rs1 = NULL, rs2 = NULL, imm1 = NULL, imm2;
+  rtx rs1 = NULL, rs2 = NULL, imm1 = NULL;
 
   if (REG_P (addr) || GET_CODE (addr) == SUBREG)
     rs1 = addr;
@@ -3306,15 +3368,14 @@ legitimate_address_p (enum machine_mode mode, rtx addr, int strict)
       else if ((REG_P (rs1) || GET_CODE (rs1) == SUBREG)
 	       && (REG_P (rs2) || GET_CODE (rs2) == SUBREG))
 	{
-	  /* We prohibit REG + REG for TFmode when there are no instructions
-	     which accept REG+REG instructions.  We do this because REG+REG
-	     is not an offsetable address.  If we get the situation in reload
+	  /* We prohibit REG + REG for TFmode when there are no quad move insns
+	     and we consequently need to split.  We do this because REG+REG
+	     is not an offsettable address.  If we get the situation in reload
 	     where source and destination of a movtf pattern are both MEMs with
 	     REG+REG address, then only one of them gets converted to an
-	     offsetable address.  */
+	     offsettable address.  */
 	  if (mode == TFmode
-	      && !(TARGET_FPU && TARGET_ARCH64 && TARGET_V9
-		   && TARGET_HARD_QUAD))
+	      && ! (TARGET_FPU && TARGET_ARCH64 && TARGET_HARD_QUAD))
 	    return 0;
 
 	  /* We prohibit REG + REG on ARCH32 if not optimizing for
@@ -3331,7 +3392,6 @@ legitimate_address_p (enum machine_mode mode, rtx addr, int strict)
 	       && ! TARGET_CM_MEDMID
 	       && RTX_OK_FOR_OLO10_P (rs2))
 	{
-	  imm2 = rs2;
 	  rs2 = NULL;
 	  imm1 = XEXP (rs1, 1);
 	  rs1 = XEXP (rs1, 0);
@@ -3347,9 +3407,9 @@ legitimate_address_p (enum machine_mode mode, rtx addr, int strict)
       if (! CONSTANT_P (imm1) || tls_symbolic_operand (rs1))
 	return 0;
 
-      /* We can't allow TFmode, because an offset greater than or equal to the
-         alignment (8) may cause the LO_SUM to overflow if !v9.  */
-      if (mode == TFmode && !TARGET_V9)
+      /* We can't allow TFmode in 32-bit mode, because an offset greater
+	 than the alignment (8) may cause the LO_SUM to overflow.  */
+      if (mode == TFmode && TARGET_ARCH32)
 	return 0;
     }
   else if (GET_CODE (addr) == CONST_INT && SMALL_INT (addr))
@@ -5033,7 +5093,7 @@ static void function_arg_record_value_2
 static void function_arg_record_value_1
  (tree, HOST_WIDE_INT, struct function_arg_record_value_parms *, bool);
 static rtx function_arg_record_value (tree, enum machine_mode, int, int, int);
-static rtx function_arg_union_value (int, enum machine_mode, int);
+static rtx function_arg_union_value (int, enum machine_mode, int, int);
 
 /* A subroutine of function_arg_record_value.  Traverse the structure
    recursively and determine how many registers will be required.  */
@@ -5377,10 +5437,18 @@ function_arg_record_value (tree type, enum machine_mode mode,
    REGNO is the hard register the union will be passed in.  */
 
 static rtx
-function_arg_union_value (int size, enum machine_mode mode, int regno)
+function_arg_union_value (int size, enum machine_mode mode, int slotno,
+			  int regno)
 {
   int nwords = ROUND_ADVANCE (size), i;
   rtx regs;
+
+  /* See comment in previous function for empty structures.  */
+  if (nwords == 0)
+    return gen_rtx_REG (mode, regno);
+
+  if (slotno == SPARC_INT_ARG_MAX - 1)
+    nwords = 1;
 
   /* Unions are passed left-justified.  */
   regs = gen_rtx_PARALLEL (mode, rtvec_alloc (nwords));
@@ -5448,7 +5516,7 @@ function_arg (const struct sparc_args *cum, enum machine_mode mode,
       if (size > 16)
 	abort (); /* shouldn't get here */
 
-      return function_arg_union_value (size, mode, regno);
+      return function_arg_union_value (size, mode, slotno, regno);
     }
   /* v9 fp args in reg slots beyond the int reg slots get passed in regs
      but also have the slot allocated for them.
@@ -5728,7 +5796,7 @@ function_value (tree type, enum machine_mode mode, int incoming_p)
 	  if (size > 32)
 	    abort (); /* shouldn't get here */
 
-	  return function_arg_union_value (size, mode, regbase);
+	  return function_arg_union_value (size, mode, 0, regbase);
 	}
       else if (AGGREGATE_TYPE_P (type))
 	{
@@ -5740,6 +5808,18 @@ function_value (tree type, enum machine_mode mode, int incoming_p)
 	    abort ();
 
 	  mode = mode_for_size (bytes * BITS_PER_UNIT, MODE_INT, 0);
+
+	  /* ??? We probably should have made the same ABI change in
+	     3.4.0 as the one we made for unions.   The latter was
+	     required by the SCD though, while the former is not
+	     specified, so we favored compatibility and efficiency.
+
+	     Now we're stuck for aggregates larger than 16 bytes,
+	     because OImode vanished in the meantime.  Let's not
+	     try to be unduly clever, and simply follow the ABI
+	     for unions in that case.  */
+	  if (mode == BLKmode)
+	    return function_arg_union_value (bytes, mode, 0, regbase);
 	}
       else if (GET_MODE_CLASS (mode) == MODE_INT
 	       && GET_MODE_SIZE (mode) < UNITS_PER_WORD)
@@ -5907,18 +5987,77 @@ sparc_va_arg (tree valist, tree type)
   return addr_rtx;
 }
 
+/* Return the string to output an unconditional branch to LABEL, which is
+   the operand number of the label.
+
+   DEST is the destination insn (i.e. the label), INSN is the source.  */
+
+const char *
+output_ubranch (rtx dest, int label, rtx insn)
+{
+  static char string[64];
+  bool noop = false;
+  char *p;
+
+  /* TurboSPARC is reported to have problems with
+     with
+	foo: b,a foo
+     i.e. an empty loop with the annul bit set.  The workaround is to use 
+        foo: b foo; nop
+     instead.  */
+
+  if (! TARGET_V9 && flag_delayed_branch
+      && (INSN_ADDRESSES (INSN_UID (dest))
+	  == INSN_ADDRESSES (INSN_UID (insn))))
+    {
+      strcpy (string, "b\t");
+      noop = true;
+    }
+  else
+    {
+      bool v9_form = false;
+
+      if (TARGET_V9 && INSN_ADDRESSES_SET_P ())
+	{
+	  int delta = (INSN_ADDRESSES (INSN_UID (dest))
+		       - INSN_ADDRESSES (INSN_UID (insn)));
+	  /* Leave some instructions for "slop".  */
+	  if (delta >= -260000 && delta < 260000)
+	    v9_form = true;
+	}
+
+      if (v9_form)
+	strcpy (string, "ba%*,pt\t%%xcc, ");
+      else
+	strcpy (string, "b%*\t");
+    }
+
+  p = strchr (string, '\0');
+  *p++ = '%';
+  *p++ = 'l';
+  *p++ = '0' + label;
+  *p++ = '%';
+  if (noop)
+    *p++ = '#';
+  else
+    *p++ = '(';
+  *p = '\0';
+
+  return string;
+}
+
 /* Return the string to output a conditional branch to LABEL, which is
    the operand number of the label.  OP is the conditional expression.
    XEXP (OP, 0) is assumed to be a condition code register (integer or
    floating point) and its mode specifies what kind of comparison we made.
 
+   DEST is the destination insn (i.e. the label), INSN is the source.
+
    REVERSED is nonzero if we should reverse the sense of the comparison.
 
    ANNUL is nonzero if we should generate an annulling branch.
 
-   NOOP is nonzero if we have to follow this branch by a noop.
-
-   INSN, if set, is the insn.  */
+   NOOP is nonzero if we have to follow this branch by a noop.  */
 
 char *
 output_cbranch (rtx op, rtx dest, int label, int reversed, int annul,
@@ -5953,7 +6092,7 @@ output_cbranch (rtx op, rtx dest, int label, int reversed, int annul,
      nop
      ba .LC29  */
 
-  far = get_attr_length (insn) >= 3;
+  far = TARGET_V9 && (get_attr_length (insn) >= 3);
   if (reversed ^ far)
     {
       /* Reversal of FP compares takes care -- an ordered compare
@@ -6083,9 +6222,7 @@ output_cbranch (rtx op, rtx dest, int label, int reversed, int annul,
       spaces -= 2;
     }
 
-  if (! TARGET_V9)
-    labelno = "";
-  else
+  if (TARGET_V9)
     {
       rtx note;
       int v8 = 0;
@@ -6135,6 +6272,9 @@ output_cbranch (rtx op, rtx dest, int label, int reversed, int annul,
 	  spaces -= 3;
 	}
     }
+  else
+    labelno = "";
+
   if (spaces > 0)
     *p++ = '\t';
   else
@@ -6338,6 +6478,8 @@ sparc_emit_floatunsdi (rtx *operands)
    register REG.  LABEL is the operand number of the label; REG is the
    operand number of the reg.  OP is the conditional expression.  The mode
    of REG says what kind of comparison we made.
+
+   DEST is the destination insn (i.e. the label), INSN is the source.
 
    REVERSED is nonzero if we should reverse the sense of the comparison.
 
@@ -7290,7 +7432,7 @@ sparc_initialize_trampoline (rtx tramp, rtx fnaddr, rtx cxt)
 
   /* Call __enable_execute_stack after writing onto the stack to make sure
      the stack address is accessible.  */
-#ifdef TRANSFER_FROM_TRAMPOLINE
+#ifdef ENABLE_EXECUTE_STACK
   emit_library_call (gen_rtx (SYMBOL_REF, Pmode, "__enable_execute_stack"),
                      LCT_NORMAL, VOIDmode, 1, tramp, Pmode);
 #endif
@@ -7331,7 +7473,7 @@ sparc64_initialize_trampoline (rtx tramp, rtx fnaddr, rtx cxt)
 
   /* Call __enable_execute_stack after writing onto the stack to make sure
      the stack address is accessible.  */
-#ifdef TRANSFER_FROM_TRAMPOLINE
+#ifdef ENABLE_EXECUTE_STACK
   emit_library_call (gen_rtx (SYMBOL_REF, Pmode, "__enable_execute_stack"),
                      LCT_NORMAL, VOIDmode, 1, tramp, Pmode);
 #endif
@@ -9146,16 +9288,18 @@ sparc_rtx_costs (rtx x, int code, int outer_code, int *total)
     }
 }
 
-/* Output code to add DELTA to the first argument, and then jump to FUNCTION.
-   Used for C++ multiple inheritance.  */
+/* Output the assembler code for a thunk function.  THUNK_DECL is the
+   declaration for the thunk function itself, FUNCTION is the decl for
+   the target function.  DELTA is an immediate constant offset to be
+   added to THIS.  If VCALL_OFFSET is nonzero, the word at address
+   (*THIS + VCALL_OFFSET) should be additionally added to THIS.  */
 
 static void
 sparc_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
-		       HOST_WIDE_INT delta,
-		       HOST_WIDE_INT vcall_offset ATTRIBUTE_UNUSED,
+		       HOST_WIDE_INT delta, HOST_WIDE_INT vcall_offset,
 		       tree function)
 {
-  rtx this, insn, funexp, delta_rtx, tmp;
+  rtx this, insn, funexp;
 
   reload_completed = 1;
   epilogue_completed = 1;
@@ -9173,26 +9317,73 @@ sparc_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
 
   /* Add DELTA.  When possible use a plain add, otherwise load it into
      a register first.  */
-  delta_rtx = GEN_INT (delta);
-  if (!SPARC_SIMM13_P (delta))
+  if (delta)
     {
-      rtx scratch = gen_rtx_REG (Pmode, 1);
+      rtx delta_rtx = GEN_INT (delta);
 
-      if (input_operand (delta_rtx, GET_MODE (scratch)))
-	emit_insn (gen_rtx_SET (VOIDmode, scratch, delta_rtx));
-      else
+      if (! SPARC_SIMM13_P (delta))
 	{
-	  if (TARGET_ARCH64)
-	    sparc_emit_set_const64 (scratch, delta_rtx);
-	  else
-	    sparc_emit_set_const32 (scratch, delta_rtx);
+	  rtx scratch = gen_rtx_REG (Pmode, 1);
+	  emit_move_insn (scratch, delta_rtx);
+	  delta_rtx = scratch;
 	}
 
-      delta_rtx = scratch;
+      /* THIS += DELTA.  */
+      emit_insn (gen_add2_insn (this, delta_rtx));
     }
 
-  tmp = gen_rtx_PLUS (Pmode, this, delta_rtx);
-  emit_insn (gen_rtx_SET (VOIDmode, this, tmp));
+  /* Add the word at address (*THIS + VCALL_OFFSET).  */
+  if (vcall_offset)
+    {
+      rtx vcall_offset_rtx = GEN_INT (vcall_offset);
+      rtx scratch = gen_rtx_REG (Pmode, 1);
+
+      if (vcall_offset >= 0)
+	abort ();
+
+      /* SCRATCH = *THIS.  */
+      emit_move_insn (scratch, gen_rtx_MEM (Pmode, this));
+
+      /* Prepare for adding VCALL_OFFSET.  The difficulty is that we
+	 may not have any available scratch register at this point.  */
+      if (SPARC_SIMM13_P (vcall_offset))
+	;
+      /* This is the case if ARCH64 (unless -ffixed-g5 is passed).  */
+      else if (! fixed_regs[5]
+	       /* The below sequence is made up of at least 2 insns,
+		  while the default method may need only one.  */
+	       && vcall_offset < -8192)
+	{
+	  rtx scratch2 = gen_rtx_REG (Pmode, 5);
+	  emit_move_insn (scratch2, vcall_offset_rtx);
+	  vcall_offset_rtx = scratch2;
+	}
+      else
+	{
+	  rtx increment = GEN_INT (-4096);
+
+	  /* VCALL_OFFSET is a negative number whose typical range can be
+	     estimated as -32768..0 in 32-bit mode.  In almost all cases
+	     it is therefore cheaper to emit multiple add insns than
+	     spilling and loading the constant into a register (at least
+	     6 insns).  */
+	  while (! SPARC_SIMM13_P (vcall_offset))
+	    {
+	      emit_insn (gen_add2_insn (scratch, increment));
+	      vcall_offset += 4096;
+	    }
+	  vcall_offset_rtx = GEN_INT (vcall_offset); /* cannot be 0 */
+	}
+
+      /* SCRATCH = *(*THIS + VCALL_OFFSET).  */
+      emit_move_insn (scratch, gen_rtx_MEM (Pmode,
+					    gen_rtx_PLUS (Pmode,
+							  scratch,
+							  vcall_offset_rtx)));
+
+      /* THIS += *(*THIS + VCALL_OFFSET).  */
+      emit_insn (gen_add2_insn (this, scratch));
+    }
 
   /* Generate a tail call to the target function.  */
   if (! TREE_USED (function))
@@ -9220,6 +9411,19 @@ sparc_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
   reload_completed = 0;
   epilogue_completed = 0;
   no_new_pseudos = 0;
+}
+
+/* Return true if sparc_output_mi_thunk would be able to output the
+   assembler code for the thunk function specified by the arguments
+   it is passed, and false otherwise.  */
+static bool
+sparc_can_output_mi_thunk (tree thunk_fndecl ATTRIBUTE_UNUSED,
+			   HOST_WIDE_INT delta ATTRIBUTE_UNUSED,
+			   HOST_WIDE_INT vcall_offset,
+			   tree function ATTRIBUTE_UNUSED)
+{
+  /* Bound the loop used in the default method above.  */
+  return (vcall_offset >= -32768 || ! fixed_regs[5]);
 }
 
 /* How to allocate a 'struct machine_function'.  */

@@ -955,6 +955,15 @@ diagnose_mismatched_decls (tree newdecl, tree olddecl,
       return false;
     }
 
+  /* Enumerators have no linkage, so may only be declared once in a
+     given scope.  */
+  if (TREE_CODE (olddecl) == CONST_DECL)
+    {
+      error ("%Jredeclaration of enumerator `%D'", newdecl, newdecl);
+      locate_old_decl (olddecl, error);
+      return false;
+    }
+
   if (!comptypes (oldtype, newtype, COMPARE_STRICT))
     {
       if (TREE_CODE (olddecl) == FUNCTION_DECL
@@ -1253,11 +1262,19 @@ diagnose_mismatched_decls (tree newdecl, tree olddecl,
 	 definition.  */
       && !(TREE_CODE (newdecl) == FUNCTION_DECL
 	   && DECL_INITIAL (newdecl) && !DECL_INITIAL (olddecl))
+      /* Don't warn about redundant redeclarations of builtins. */
+      && !(TREE_CODE (newdecl) == FUNCTION_DECL
+	   && !DECL_BUILT_IN (newdecl)
+	   && DECL_BUILT_IN (olddecl)
+	   && C_DECL_INVISIBLE (olddecl))
       /* Don't warn about an extern followed by a definition.  */
       && !(DECL_EXTERNAL (olddecl) && !DECL_EXTERNAL (newdecl))
       /* Don't warn about forward parameter decls.  */
       && !(TREE_CODE (newdecl) == PARM_DECL
-	   && TREE_ASM_WRITTEN (olddecl) && !TREE_ASM_WRITTEN (newdecl)))
+	   && TREE_ASM_WRITTEN (olddecl) && !TREE_ASM_WRITTEN (newdecl))
+      /* Don't warn about a variable definition following a declaration.  */
+      && !(TREE_CODE (newdecl) == VAR_DECL
+	   && DECL_INITIAL (newdecl) && !DECL_INITIAL (olddecl)))
     {
       warning ("%Jredundant redeclaration of '%D'", newdecl, newdecl);
       warned = true;
@@ -2946,11 +2963,20 @@ void
 push_parm_decl (tree parm)
 {
   tree decl;
+  int old_dont_save_pending_sizes_p = 0;
 
   /* Don't attempt to expand sizes while parsing this decl.
      (We can get here with i_s_e 1 somehow from Objective-C.)  */
   int save_immediate_size_expand = immediate_size_expand;
   immediate_size_expand = 0;
+
+  /* If this is a nested function, we do want to keep SAVE_EXPRs for
+     the argument sizes, regardless of the parent's setting.  */
+  if (cfun)
+    {
+      old_dont_save_pending_sizes_p = cfun->x_dont_save_pending_sizes_p;
+      cfun->x_dont_save_pending_sizes_p = 0;
+    }
 
   decl = grokdeclarator (TREE_VALUE (TREE_PURPOSE (parm)),
 			 TREE_PURPOSE (TREE_PURPOSE (parm)),
@@ -2961,6 +2987,8 @@ push_parm_decl (tree parm)
 
   finish_decl (decl, NULL_TREE, NULL_TREE);
 
+  if (cfun)
+    cfun->x_dont_save_pending_sizes_p = old_dont_save_pending_sizes_p;
   immediate_size_expand = save_immediate_size_expand;
 }
 
@@ -3615,10 +3643,6 @@ grokdeclarator (tree declarator, tree declspecs,
 	}
     }
 
-  /* Check the type and width of a bit-field.  */
-  if (bitfield)
-    check_bitfield_type_and_width (&type, width, orig_name);
-
   /* Figure out the type qualifiers for the declaration.  There are
      two ways a declaration can become qualified.  One is something
      like `const int i' where the `const' is explicit.  Another is
@@ -3978,7 +4002,17 @@ grokdeclarator (tree declarator, tree declspecs,
 	}
       else if (TREE_CODE (declarator) == CALL_EXPR)
 	{
+	  /* Say it's a definition only for the declarator closest to
+	     the identifier, apart possibly from some attributes.  */
+	  bool really_funcdef = false;
 	  tree arg_types;
+	  if (funcdef_flag)
+	    {
+	      tree t = TREE_OPERAND (declarator, 0);
+	      while (TREE_CODE (t) == TREE_LIST)
+		t = TREE_VALUE (t);
+	      really_funcdef = (TREE_CODE (t) == IDENTIFIER_NODE);
+	    }
 
 	  /* Declaring a function type.
 	     Make sure we have a valid type for the function to return.  */
@@ -4004,11 +4038,7 @@ grokdeclarator (tree declarator, tree declspecs,
 	     inner layer of declarator.  */
 
 	  arg_types = grokparms (TREE_OPERAND (declarator, 1),
-				 funcdef_flag
-				 /* Say it's a definition
-				    only for the CALL_EXPR
-				    closest to the identifier.  */
-				 && TREE_CODE (TREE_OPERAND (declarator, 0)) == IDENTIFIER_NODE);
+				 really_funcdef);
 	  /* Type qualifiers before the return type of the function
 	     qualify the return type, not the function type.  */
 	  if (type_quals)
@@ -4121,6 +4151,10 @@ grokdeclarator (tree declarator, tree declspecs,
     }
 
   /* Now TYPE has the actual type.  */
+
+  /* Check the type and width of a bit-field.  */
+  if (bitfield)
+    check_bitfield_type_and_width (&type, width, orig_name);
 
   /* Did array size calculations overflow?  */
 
@@ -4768,12 +4802,21 @@ start_struct (enum tree_code code, tree name)
     ref = lookup_tag (code, name, 1);
   if (ref && TREE_CODE (ref) == code)
     {
-      if (TYPE_FIELDS (ref))
+      if (TYPE_SIZE (ref))
         {
 	  if (code == UNION_TYPE)
 	    error ("redefinition of `union %s'", IDENTIFIER_POINTER (name));
           else
 	    error ("redefinition of `struct %s'", IDENTIFIER_POINTER (name));
+	}
+      else if (C_TYPE_BEING_DEFINED (ref))
+	{
+	  if (code == UNION_TYPE)
+	    error ("nested redefinition of `union %s'",
+		   IDENTIFIER_POINTER (name));
+          else
+	    error ("nested redefinition of `struct %s'",
+		   IDENTIFIER_POINTER (name));
 	}
     }
   else
@@ -4989,11 +5032,6 @@ finish_struct (tree t, tree fieldlist, tree attributes)
       if (C_DECL_VARIABLE_SIZE (x))
 	C_TYPE_VARIABLE_SIZE (t) = 1;
 
-      /* Detect invalid nested redefinition.  */
-      if (TREE_TYPE (x) == t)
-	error ("nested redefinition of `%s'",
-	       IDENTIFIER_POINTER (TYPE_NAME (t)));
-
       if (DECL_INITIAL (x))
 	{
 	  unsigned HOST_WIDE_INT width = tree_low_cst (DECL_INITIAL (x), 1);
@@ -5115,13 +5153,16 @@ finish_struct (tree t, tree fieldlist, tree attributes)
       TYPE_LANG_SPECIFIC (x) = TYPE_LANG_SPECIFIC (t);
       TYPE_ALIGN (x) = TYPE_ALIGN (t);
       TYPE_USER_ALIGN (x) = TYPE_USER_ALIGN (t);
+      C_TYPE_FIELDS_READONLY (x) = C_TYPE_FIELDS_READONLY (t);
+      C_TYPE_FIELDS_VOLATILE (x) = C_TYPE_FIELDS_VOLATILE (t);
+      C_TYPE_VARIABLE_SIZE (x) = C_TYPE_VARIABLE_SIZE (t);
     }
 
   /* If this was supposed to be a transparent union, but we can't
      make it one, warn and turn off the flag.  */
   if (TREE_CODE (t) == UNION_TYPE
       && TYPE_TRANSPARENT_UNION (t)
-      && TYPE_MODE (t) != DECL_MODE (TYPE_FIELDS (t)))
+      && (!TYPE_FIELDS (t) || TYPE_MODE (t) != DECL_MODE (TYPE_FIELDS (t))))
     {
       TYPE_TRANSPARENT_UNION (t) = 0;
       warning ("union cannot be made transparent");
@@ -5187,6 +5228,9 @@ start_enum (tree name)
       enumtype = make_node (ENUMERAL_TYPE);
       pushtag (name, enumtype);
     }
+
+  if (C_TYPE_BEING_DEFINED (enumtype))
+    error ("nested redefinition of `enum %s'", IDENTIFIER_POINTER (name));
 
   C_TYPE_BEING_DEFINED (enumtype) = 1;
 
@@ -5273,9 +5317,19 @@ finish_enum (tree enumtype, tree values, tree attributes)
 
   TYPE_MIN_VALUE (enumtype) = minnode;
   TYPE_MAX_VALUE (enumtype) = maxnode;
-  TYPE_PRECISION (enumtype) = precision;
   TREE_UNSIGNED (enumtype) = unsign;
   TYPE_SIZE (enumtype) = 0;
+
+  /* If the precision of the type was specific with an attribute and it
+     was too small, give an error.  Otherwise, use it.  */
+  if (TYPE_PRECISION (enumtype))
+    {
+      if (precision > TYPE_PRECISION (enumtype))
+	error ("specified mode too small for enumeral values");
+    }
+  else
+    TYPE_PRECISION (enumtype) = precision;
+
   layout_type (enumtype);
 
   if (values != error_mark_node)
@@ -5950,9 +6004,6 @@ store_parm_decls (void)
 {
   tree fndecl = current_function_decl;
 
-  /* The function containing FNDECL, if any.  */
-  tree context = decl_function_context (fndecl);
-
   /* True if this definition is written with a prototype.  */
   bool prototype = (current_function_parms
 		    && TREE_CODE (current_function_parms) != TREE_LIST);
@@ -5977,20 +6028,9 @@ store_parm_decls (void)
   /* Begin the statement tree for this function.  */
   begin_stmt_tree (&DECL_SAVED_TREE (fndecl));
 
-  /* If this is a nested function, save away the sizes of any
-     variable-size types so that we can expand them when generating
-     RTL.  */
-  if (context)
-    {
-      tree t;
-
-      DECL_LANG_SPECIFIC (fndecl)->pending_sizes
-	= nreverse (get_pending_sizes ());
-      for (t = DECL_LANG_SPECIFIC (fndecl)->pending_sizes;
-	   t;
-	   t = TREE_CHAIN (t))
-	SAVE_EXPR_CONTEXT (TREE_VALUE (t)) = context;
-    }
+  /* Save away the sizes of any variable-size types so that we can
+     expand them when generating RTL.  */
+  DECL_LANG_SPECIFIC (fndecl)->pending_sizes = get_pending_sizes ();
 
   /* This function is being processed in whole-function mode.  */
   cfun->x_whole_function_mode_p = 1;
@@ -6141,15 +6181,12 @@ static void
 c_expand_body_1 (tree fndecl, int nested_p)
 {
   if (nested_p)
-    {
-      /* Make sure that we will evaluate variable-sized types involved
-	 in our function's type.  */
-      expand_pending_sizes (DECL_LANG_SPECIFIC (fndecl)->pending_sizes);
-
-      /* Squirrel away our current state.  */
-      push_function_context ();
-    }
+    /* Squirrel away our current state.  */
+    push_function_context ();
     
+  /* Make sure that we will evaluate variable-sized types involved
+     in our function's type.  */
+  put_pending_sizes (DECL_LANG_SPECIFIC (fndecl)->pending_sizes);
   tree_rest_of_compilation (fndecl, nested_p);
 
   if (nested_p)
@@ -6370,7 +6407,7 @@ c_begin_compound_stmt (void)
   tree stmt;
 
   /* Create the COMPOUND_STMT.  */
-  stmt = add_stmt (build_stmt (COMPOUND_STMT, NULL_TREE));
+  stmt = add_stmt (build_stmt (COMPOUND_STMT, error_mark_node));
 
   return stmt;
 }
