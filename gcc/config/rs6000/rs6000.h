@@ -258,7 +258,7 @@ extern int target_flags;
 #define TARGET_POWERPC64	(target_flags & MASK_POWERPC64)
 #endif
 
-#define TARGET_XL_CALL 0
+#define TARGET_XL_COMPAT 0
 
 /* Run-time compilation parameters selecting different hardware subsets.
 
@@ -464,6 +464,9 @@ enum group_termination
    {"longcall", &rs6000_longcall_switch,				\
     N_("Avoid all range limits on call instructions"), 0},		\
    {"no-longcall", &rs6000_longcall_switch, "", 0},			\
+   {"warn-altivec-long", &rs6000_warn_altivec_long_switch, \
+    N_("Warn about deprecated 'vector long ...' AltiVec type usage"), 0}, \
+   {"no-warn-altivec-long", &rs6000_warn_altivec_long_switch, "", 0}, \
    {"sched-costly-dep=", &rs6000_sched_costly_dep_str,                  \
     N_("Determine which dependences between insns are considered costly"), 0}, \
    {"insert-sched-nops=", &rs6000_sched_insert_nops_str,                \
@@ -531,6 +534,9 @@ extern const char *rs6000_sched_costly_dep_str;
 extern enum rs6000_dependence_cost rs6000_sched_costly_dep;
 extern const char *rs6000_sched_insert_nops_str;
 extern enum rs6000_nop_insertion rs6000_sched_insert_nops;
+
+extern int rs6000_warn_altivec_long;
+extern const char *rs6000_warn_altivec_long_switch;
 
 /* Alignment options for fields in structures for sub-targets following
    AIX-like ABI.
@@ -1165,6 +1171,9 @@ extern enum rs6000_nop_insertion rs6000_sched_insert_nops;
       = fixed_regs[RS6000_PIC_OFFSET_TABLE_REGNUM]			\
       = call_used_regs[RS6000_PIC_OFFSET_TABLE_REGNUM]			\
       = call_really_used_regs[RS6000_PIC_OFFSET_TABLE_REGNUM] = 1;	\
+  if (TARGET_TOC && TARGET_MINIMAL_TOC)					\
+    fixed_regs[RS6000_PIC_OFFSET_TABLE_REGNUM]				\
+      = call_used_regs[RS6000_PIC_OFFSET_TABLE_REGNUM] = 1;		\
   if (TARGET_ALTIVEC)                                                   \
     global_regs[VSCR_REGNO] = 1;                                        \
   if (TARGET_SPE)							\
@@ -1483,11 +1492,8 @@ enum reg_class
    or out of a register in CLASS in MODE.  If it can be done directly,
    NO_REGS is returned.  */
 
-#define SECONDARY_INPUT_RELOAD_CLASS(CLASS, MODE, IN) \
-  secondary_reload_class (CLASS, MODE, IN, 1)
-
-#define SECONDARY_OUTPUT_RELOAD_CLASS(CLASS, MODE, IN) \
-  secondary_reload_class (CLASS, MODE, IN, 0)
+#define SECONDARY_RELOAD_CLASS(CLASS, MODE, IN) \
+  secondary_reload_class (CLASS, MODE, IN)
 
 /* If we are copying between FP or AltiVec registers and anything
    else, we need a memory location.  */
@@ -2662,8 +2668,6 @@ extern char rs6000_reg_names[][8];	/* register names (0 vs. %r0).  */
   {"lwa_operand", {SUBREG, MEM, REG}},					   \
   {"volatile_mem_operand", {MEM}},					   \
   {"offsettable_mem_operand", {MEM}},					   \
-  {"invalid_gpr_mem", {MEM}},						   \
-  {"base_reg_operand", {REG}},						   \
   {"mem_or_easy_const_operand", {SUBREG, MEM, CONST_DOUBLE}},		   \
   {"add_operand", {SUBREG, REG, CONST_INT}},				   \
   {"non_add_cint_operand", {CONST_INT}},				   \
@@ -2918,9 +2922,10 @@ enum rs6000_builtins
   ALTIVEC_BUILTIN_ABS_V4SI,
   ALTIVEC_BUILTIN_ABS_V4SF,
   ALTIVEC_BUILTIN_ABS_V8HI,
-  ALTIVEC_BUILTIN_ABS_V16QI
+  ALTIVEC_BUILTIN_ABS_V16QI,
+  ALTIVEC_BUILTIN_COMPILETIME_ERROR,
   /* SPE builtins.  */
-  , SPE_BUILTIN_EVADDW,
+  SPE_BUILTIN_EVADDW,
   SPE_BUILTIN_EVAND,
   SPE_BUILTIN_EVANDC,
   SPE_BUILTIN_EVDIVWS,

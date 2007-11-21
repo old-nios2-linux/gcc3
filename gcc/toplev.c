@@ -1860,6 +1860,9 @@ compile_file (void)
 
   dw2_output_indirect_constants ();
 
+  /* Flush any pending equate directives.  */
+  process_pending_assemble_output_defs ();
+
   if (profile_arc_flag || flag_test_coverage || flag_branch_probabilities)
     {
       timevar_push (TV_DUMP);
@@ -2145,7 +2148,7 @@ rest_of_handle_stack_regs (tree decl, rtx insns)
 		       | (flag_crossjumping ? CLEANUP_CROSSJUMP : 0))
 	  && flag_reorder_blocks)
 	{
-	  reorder_basic_blocks ();
+	  reorder_basic_blocks (0);
 	  cleanup_cfg (CLEANUP_EXPENSIVE | CLEANUP_POST_REGSTACK);
 	}
     }
@@ -2317,23 +2320,22 @@ static void
 rest_of_handle_reorder_blocks (tree decl, rtx insns)
 {
   bool changed;
+  unsigned int liveness_flags;
+
   open_dump_file (DFI_bbro, decl);
 
   /* Last attempt to optimize CFG, as scheduling, peepholing and insn
      splitting possibly introduced more crossjumping opportunities.  */
-  changed = cleanup_cfg (CLEANUP_EXPENSIVE
-			 | (!HAVE_conditional_execution
-			    ? CLEANUP_UPDATE_LIFE : 0));
+  liveness_flags = (!HAVE_conditional_execution ? CLEANUP_UPDATE_LIFE : 0);
+  changed = cleanup_cfg (CLEANUP_EXPENSIVE | liveness_flags);
 
   if (flag_sched2_use_traces && flag_schedule_insns_after_reload)
-    tracer ();
+    tracer (liveness_flags);
   if (flag_reorder_blocks)
-    reorder_basic_blocks ();
+    reorder_basic_blocks (liveness_flags);
   if (flag_reorder_blocks
       || (flag_sched2_use_traces && flag_schedule_insns_after_reload))
-    changed |= cleanup_cfg (CLEANUP_EXPENSIVE
-			    | (!HAVE_conditional_execution
-			       ? CLEANUP_UPDATE_LIFE : 0));
+    changed |= cleanup_cfg (CLEANUP_EXPENSIVE | liveness_flags);
 
   /* On conditional execution targets we can not update the life cheaply, so
      we deffer the updating to after both cleanups.  This may lose some cases
@@ -2423,7 +2425,7 @@ rest_of_handle_tracer (tree decl, rtx insns)
   open_dump_file (DFI_tracer, decl);
   if (rtl_dump_file)
     dump_flow_info (rtl_dump_file);
-  tracer ();
+  tracer (0);
   cleanup_cfg (CLEANUP_EXPENSIVE);
   reg_scan (insns, max_reg_num (), 0);
   close_dump_file (DFI_tracer, print_rtl_with_bb, get_insns ());
@@ -2714,9 +2716,11 @@ rest_of_handle_inlining (tree decl)
 	     for unreferenced symbols.  See g77.f-torture/execute/980520-1.f.
 	     But removing this line from the check breaks all languages that
 	     use the call graph to output symbols.  This hard-coded check is
-	     the least invasive work-around.  */
+	     the least invasive work-around.  Nested functions need to be
+	     deferred too.  */
 	  && (flag_inline_functions
-	      || strcmp (lang_hooks.name, "GNU F77") == 0)
+	      || strcmp (lang_hooks.name, "GNU F77") == 0
+	      || (cgraph_n_nodes > 0 && cgraph_node (decl)->origin))
 	  && ((! TREE_PUBLIC (decl) && ! TREE_ADDRESSABLE (decl)
 	       && ! TREE_SYMBOL_REFERENCED (DECL_ASSEMBLER_NAME (decl))
 	       && ! flag_keep_inline_functions)
@@ -3655,8 +3659,7 @@ rest_of_compilation (tree decl)
   if ((*targetm.binds_local_p) (current_function_decl))
     {
       int pref = cfun->preferred_stack_boundary;
-      if (cfun->recursive_call_emit
-          && cfun->stack_alignment_needed > cfun->preferred_stack_boundary)
+      if (cfun->stack_alignment_needed > cfun->preferred_stack_boundary)
 	pref = cfun->stack_alignment_needed;
       cgraph_rtl_info (current_function_decl)->preferred_incoming_stack_boundary
         = pref;
@@ -4268,6 +4271,10 @@ general_init (const char *argv0)
 static void
 process_options (void)
 {
+  /* Just in case lang_hooks.post_options ends up calling a debug_hook.
+     This can happen with incorrect pre-processed input. */
+  debug_hooks = &do_nothing_debug_hooks;
+
   /* Allow the front end to perform consistency checks and do further
      initialization based on the command line options.  This hook also
      sets the original filename if appropriate (e.g. foo.i -> foo.c)
@@ -4397,7 +4404,7 @@ process_options (void)
   /* Now we know write_symbols, set up the debug hooks based on it.
      By default we do nothing for debug output.  */
   if (write_symbols == NO_DEBUG)
-    debug_hooks = &do_nothing_debug_hooks;
+    ;
 #if defined(DBX_DEBUGGING_INFO)
   else if (write_symbols == DBX_DEBUG)
     debug_hooks = &dbx_debug_hooks;
@@ -4488,8 +4495,6 @@ process_options (void)
 static void
 backend_init (void)
 {
-  init_adjust_machine_modes ();
-
   init_emit_once (debug_info_level == DINFO_LEVEL_NORMAL
 		  || debug_info_level == DINFO_LEVEL_VERBOSE
 #ifdef VMS_DEBUGGING_INFO
@@ -4633,6 +4638,11 @@ do_compile (void)
   /* Don't do any more if an error has already occurred.  */
   if (!errorcount)
     {
+      /* This must be run always, because it is needed to compute the FP
+	 predefined macros, such as __LDBL_MAX__, for targets using non
+	 default FP formats.  */
+      init_adjust_machine_modes ();
+
       /* Set up the back-end if requested.  */
       if (!no_backend)
 	backend_init ();

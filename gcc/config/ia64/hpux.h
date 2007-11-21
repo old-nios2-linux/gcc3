@@ -84,13 +84,6 @@ do {							\
 	  %{mlp64:-L/usr/lib/hpux64/libp} -lgprof} \
      %{!symbolic:-lc}}"
 
-#ifndef CROSS_COMPILE
-#undef LIBGCC_SPEC
-#define LIBGCC_SPEC \
-  "%{shared-libgcc:%{!mlp64:-lgcc_s}%{mlp64:-lgcc_s_hpux64} -lgcc} \
-   %{!shared-libgcc:-lgcc}"
-#endif
-
 #undef SUBTARGET_SWITCHES
 #define SUBTARGET_SWITCHES \
   { "ilp32",    MASK_ILP32,     "Generate ILP32 code" }, \
@@ -193,10 +186,6 @@ do {								\
 #define TARGET_ASM_SELECT_RTX_SECTION  ia64_rwreloc_select_rtx_section
 #undef  TARGET_SECTION_TYPE_FLAGS
 #define TARGET_SECTION_TYPE_FLAGS  ia64_rwreloc_section_type_flags
-
-/* HP-UX does not support thread-local storage.  */
-#undef TARGET_HAVE_TLS
-#define TARGET_HAVE_TLS false
 
 /* ia64 HPUX has the float and long double forms of math functions.  */
 #undef TARGET_C99_FUNCTIONS

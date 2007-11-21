@@ -1,6 +1,6 @@
 /* Output routines for GCC for ARM.
    Copyright (C) 1991, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
-   2002, 2003, 2004  Free Software Foundation, Inc.
+   2002, 2003, 2004, 2005  Free Software Foundation, Inc.
    Contributed by Pieter `Tiggr' Schoenmakers (rcpieter@win.tue.nl)
    and Martin Simmons (@harleqn.co.uk).
    More major hacks by Richard Earnshaw (rearnsha@arm.com).
@@ -4056,6 +4056,16 @@ cirrus_shift_const (rtx op, enum machine_mode mode ATTRIBUTE_UNUSED)
 	  && INTVAL (op) < 64);
 }
 
+/* Return true if X is a register that will be eliminated later on.  */
+int
+arm_eliminable_register (rtx x)
+{
+  return REG_P (x) && (REGNO (x) == FRAME_POINTER_REGNUM
+		       || REGNO (x) == ARG_POINTER_REGNUM
+		       || (REGNO (x) >= FIRST_VIRTUAL_REGISTER
+			   && REGNO (x) <= LAST_VIRTUAL_REGISTER));
+}
+
 /* Returns TRUE if INSN is an "LDR REG, ADDR" instruction.
    Use by the Cirrus Maverick code which has to workaround
    a hardware bug triggered by such instructions.  */
@@ -4569,33 +4579,42 @@ adjacent_mem_locations (rtx a, rtx b)
 	  || (GET_CODE (XEXP (b, 0)) == PLUS
 	      && GET_CODE (XEXP (XEXP (b, 0), 1)) == CONST_INT)))
     {
-      int val0 = 0, val1 = 0;
-      int reg0, reg1;
-  
+      HOST_WIDE_INT val0 = 0, val1 = 0;
+      rtx reg0, reg1;
+      int val_diff;
+
       if (GET_CODE (XEXP (a, 0)) == PLUS)
         {
-	  reg0 = REGNO  (XEXP (XEXP (a, 0), 0));
+	  reg0 = XEXP (XEXP (a, 0), 0);
 	  val0 = INTVAL (XEXP (XEXP (a, 0), 1));
         }
       else
-	reg0 = REGNO (XEXP (a, 0));
+	reg0 = XEXP (a, 0);
 
       if (GET_CODE (XEXP (b, 0)) == PLUS)
         {
-	  reg1 = REGNO  (XEXP (XEXP (b, 0), 0));
+	  reg1 = XEXP (XEXP (b, 0), 0);
 	  val1 = INTVAL (XEXP (XEXP (b, 0), 1));
         }
       else
-	reg1 = REGNO (XEXP (b, 0));
+	reg1 = XEXP (b, 0);
 
       /* Don't accept any offset that will require multiple
 	 instructions to handle, since this would cause the
 	 arith_adjacentmem pattern to output an overlong sequence.  */
       if (!const_ok_for_op (PLUS, val0) || !const_ok_for_op (PLUS, val1))
 	return 0;
-      
-      return (reg0 == reg1) && ((val1 - val0) == 4 || (val0 - val1) == 4);
+
+      /* Don't allow an eliminable register: register elimination can make
+	 the offset too large.  */
+      if (arm_eliminable_register (reg0))
+	return 0;
+
+      val_diff = val1 - val0;
+      return ((REGNO (reg0) == REGNO (reg1))
+	      && (val_diff == 4 || val_diff == -4));
     }
+
   return 0;
 }
 
@@ -5139,13 +5158,13 @@ multi_register_push (rtx op, enum machine_mode mode ATTRIBUTE_UNUSED)
 
 rtx
 arm_gen_load_multiple (int base_regno, int count, rtx from, int up,
-		       int write_back, int unchanging_p, int in_struct_p,
-		       int scalar_p)
+		       int write_back, rtx basemem, HOST_WIDE_INT *offsetp)
 {
+  HOST_WIDE_INT offset = *offsetp;
   int i = 0, j;
   rtx result;
   int sign = up ? 1 : -1;
-  rtx mem;
+  rtx mem, addr;
 
   /* XScale has load-store double instructions, but they have stricter
      alignment requirements than load-store multiple, so we can not
@@ -5183,15 +5202,17 @@ arm_gen_load_multiple (int base_regno, int count, rtx from, int up,
       
       for (i = 0; i < count; i++)
 	{
-	  mem = gen_rtx_MEM (SImode, plus_constant (from, i * 4 * sign));
-	  RTX_UNCHANGING_P (mem) = unchanging_p;
-	  MEM_IN_STRUCT_P (mem) = in_struct_p;
-	  MEM_SCALAR_P (mem) = scalar_p;
+	  addr = plus_constant (from, i * 4 * sign);
+	  mem = adjust_automodify_address (basemem, SImode, addr, offset);
 	  emit_move_insn (gen_rtx_REG (SImode, base_regno + i), mem);
+	  offset += 4 * sign;
 	}
 
       if (write_back)
-	emit_move_insn (from, plus_constant (from, count * 4 * sign));
+	{
+	  emit_move_insn (from, plus_constant (from, count * 4 * sign));
+	  *offsetp = offset;
+	}
 
       seq = get_insns ();
       end_sequence ();
@@ -5212,26 +5233,28 @@ arm_gen_load_multiple (int base_regno, int count, rtx from, int up,
 
   for (j = 0; i < count; i++, j++)
     {
-      mem = gen_rtx_MEM (SImode, plus_constant (from, j * 4 * sign));
-      RTX_UNCHANGING_P (mem) = unchanging_p;
-      MEM_IN_STRUCT_P (mem) = in_struct_p;
-      MEM_SCALAR_P (mem) = scalar_p;
+      addr = plus_constant (from, j * 4 * sign);
+      mem = adjust_automodify_address_nv (basemem, SImode, addr, offset);
       XVECEXP (result, 0, i)
 	= gen_rtx_SET (VOIDmode, gen_rtx_REG (SImode, base_regno + j), mem);
+      offset += 4 * sign;
     }
+
+  if (write_back)
+    *offsetp = offset;
 
   return result;
 }
 
 rtx
 arm_gen_store_multiple (int base_regno, int count, rtx to, int up,
-			int write_back, int unchanging_p, int in_struct_p,
-			int scalar_p)
+			int write_back, rtx basemem, HOST_WIDE_INT *offsetp)
 {
+  HOST_WIDE_INT offset = *offsetp;
   int i = 0, j;
   rtx result;
   int sign = up ? 1 : -1;
-  rtx mem;
+  rtx mem, addr;
 
   /* See arm_gen_load_multiple for discussion of
      the pros/cons of ldm/stm usage for XScale.  */
@@ -5243,15 +5266,17 @@ arm_gen_store_multiple (int base_regno, int count, rtx to, int up,
       
       for (i = 0; i < count; i++)
 	{
-	  mem = gen_rtx_MEM (SImode, plus_constant (to, i * 4 * sign));
-	  RTX_UNCHANGING_P (mem) = unchanging_p;
-	  MEM_IN_STRUCT_P (mem) = in_struct_p;
-	  MEM_SCALAR_P (mem) = scalar_p;
+	  addr = plus_constant (to, i * 4 * sign);
+	  mem = adjust_automodify_address (basemem, SImode, addr, offset);
 	  emit_move_insn (mem, gen_rtx_REG (SImode, base_regno + i));
+	  offset += 4 * sign;
 	}
 
       if (write_back)
-	emit_move_insn (to, plus_constant (to, count * 4 * sign));
+	{
+	  emit_move_insn (to, plus_constant (to, count * 4 * sign));
+	  *offsetp = offset;
+	}
 
       seq = get_insns ();
       end_sequence ();
@@ -5272,14 +5297,15 @@ arm_gen_store_multiple (int base_regno, int count, rtx to, int up,
 
   for (j = 0; i < count; i++, j++)
     {
-      mem = gen_rtx_MEM (SImode, plus_constant (to, j * 4 * sign));
-      RTX_UNCHANGING_P (mem) = unchanging_p;
-      MEM_IN_STRUCT_P (mem) = in_struct_p;
-      MEM_SCALAR_P (mem) = scalar_p;
-
+      addr = plus_constant (to, j * 4 * sign);
+      mem = adjust_automodify_address_nv (basemem, SImode, addr, offset);
       XVECEXP (result, 0, i)
 	= gen_rtx_SET (VOIDmode, mem, gen_rtx_REG (SImode, base_regno + j));
+      offset += 4 * sign;
     }
+
+  if (write_back)
+    *offsetp = offset;
 
   return result;
 }
@@ -5288,13 +5314,11 @@ int
 arm_gen_movstrqi (rtx *operands)
 {
   HOST_WIDE_INT in_words_to_go, out_words_to_go, last_bytes;
+  HOST_WIDE_INT srcoffset, dstoffset;
   int i;
-  rtx src, dst;
-  rtx st_src, st_dst, fin_src, fin_dst;
+  rtx src, dst, srcbase, dstbase;
   rtx part_bytes_reg = NULL;
   rtx mem;
-  int dst_unchanging_p, dst_in_struct_p, src_unchanging_p, src_in_struct_p;
-  int dst_scalar_p, src_scalar_p;
 
   if (GET_CODE (operands[2]) != CONST_INT
       || GET_CODE (operands[3]) != CONST_INT
@@ -5302,23 +5326,17 @@ arm_gen_movstrqi (rtx *operands)
       || INTVAL (operands[3]) & 3)
     return 0;
 
-  st_dst = XEXP (operands[0], 0);
-  st_src = XEXP (operands[1], 0);
-
-  dst_unchanging_p = RTX_UNCHANGING_P (operands[0]);
-  dst_in_struct_p = MEM_IN_STRUCT_P (operands[0]);
-  dst_scalar_p = MEM_SCALAR_P (operands[0]);
-  src_unchanging_p = RTX_UNCHANGING_P (operands[1]);
-  src_in_struct_p = MEM_IN_STRUCT_P (operands[1]);
-  src_scalar_p = MEM_SCALAR_P (operands[1]);
-
-  fin_dst = dst = copy_to_mode_reg (SImode, st_dst);
-  fin_src = src = copy_to_mode_reg (SImode, st_src);
+  dstbase = operands[0];
+  srcbase = operands[1];
+  
+  dst = copy_to_mode_reg (SImode, XEXP (dstbase, 0));
+  src = copy_to_mode_reg (SImode, XEXP (srcbase, 0));
 
   in_words_to_go = ARM_NUM_INTS (INTVAL (operands[2]));
   out_words_to_go = INTVAL (operands[2]) / 4;
   last_bytes = INTVAL (operands[2]) & 3;
-
+  dstoffset = srcoffset = 0;
+  
   if (out_words_to_go != in_words_to_go && ((in_words_to_go - 1) & 3) != 0)
     part_bytes_reg = gen_rtx_REG (SImode, (in_words_to_go - 1) & 3);
 
@@ -5326,38 +5344,32 @@ arm_gen_movstrqi (rtx *operands)
     {
       if (in_words_to_go > 4)
 	emit_insn (arm_gen_load_multiple (0, 4, src, TRUE, TRUE,
-					  src_unchanging_p,
-					  src_in_struct_p,
-					  src_scalar_p));
+					  srcbase, &srcoffset));
       else
 	emit_insn (arm_gen_load_multiple (0, in_words_to_go, src, TRUE, 
-					  FALSE, src_unchanging_p,
-					  src_in_struct_p, src_scalar_p));
+					  FALSE, srcbase, &srcoffset));
 
       if (out_words_to_go)
 	{
 	  if (out_words_to_go > 4)
 	    emit_insn (arm_gen_store_multiple (0, 4, dst, TRUE, TRUE,
-					       dst_unchanging_p,
-					       dst_in_struct_p,
-					       dst_scalar_p));
+					       dstbase, &dstoffset));
+	  
 	  else if (out_words_to_go != 1)
 	    emit_insn (arm_gen_store_multiple (0, out_words_to_go,
 					       dst, TRUE, 
 					       (last_bytes == 0
 						? FALSE : TRUE),
-					       dst_unchanging_p,
-					       dst_in_struct_p,
-					       dst_scalar_p));
+					       dstbase, &dstoffset));
 	  else
 	    {
-	      mem = gen_rtx_MEM (SImode, dst);
-	      RTX_UNCHANGING_P (mem) = dst_unchanging_p;
-	      MEM_IN_STRUCT_P (mem) = dst_in_struct_p;
-	      MEM_SCALAR_P (mem) = dst_scalar_p;
+	      mem = adjust_automodify_address (dstbase, SImode, dst, dstoffset);
 	      emit_move_insn (mem, gen_rtx_REG (SImode, 0));
 	      if (last_bytes != 0)
-		emit_insn (gen_addsi3 (dst, dst, GEN_INT (4)));
+		{
+		  emit_insn (gen_addsi3 (dst, dst, GEN_INT (4)));
+		  dstoffset += 4;
+		}
 	    }
 	}
 
@@ -5369,20 +5381,12 @@ arm_gen_movstrqi (rtx *operands)
   if (out_words_to_go)
     {
       rtx sreg;
-      
-      mem = gen_rtx_MEM (SImode, src);
-      RTX_UNCHANGING_P (mem) = src_unchanging_p;
-      MEM_IN_STRUCT_P (mem) = src_in_struct_p;
-      MEM_SCALAR_P (mem) = src_scalar_p;
-      emit_move_insn (sreg = gen_reg_rtx (SImode), mem);
-      emit_move_insn (fin_src = gen_reg_rtx (SImode), plus_constant (src, 4));
-      
-      mem = gen_rtx_MEM (SImode, dst);
-      RTX_UNCHANGING_P (mem) = dst_unchanging_p;
-      MEM_IN_STRUCT_P (mem) = dst_in_struct_p;
-      MEM_SCALAR_P (mem) = dst_scalar_p;
+
+      mem = adjust_automodify_address (srcbase, SImode, src, srcoffset);
+      sreg = copy_to_reg (mem);
+
+      mem = adjust_automodify_address (dstbase, SImode, dst, dstoffset);
       emit_move_insn (mem, sreg);
-      emit_move_insn (fin_dst = gen_reg_rtx (SImode), plus_constant (dst, 4));
       in_words_to_go--;
       
       if (in_words_to_go)	/* Sanity check */
@@ -5394,10 +5398,7 @@ arm_gen_movstrqi (rtx *operands)
       if (in_words_to_go < 0)
 	abort ();
 
-      mem = gen_rtx_MEM (SImode, src);
-      RTX_UNCHANGING_P (mem) = src_unchanging_p;
-      MEM_IN_STRUCT_P (mem) = src_in_struct_p;
-      MEM_SCALAR_P (mem) = src_scalar_p;
+      mem = adjust_automodify_address (srcbase, SImode, src, srcoffset);
       part_bytes_reg = copy_to_mode_reg (SImode, mem);
     }
 
@@ -5415,10 +5416,9 @@ arm_gen_movstrqi (rtx *operands)
       
       while (last_bytes)
 	{
-	  mem = gen_rtx_MEM (QImode, plus_constant (dst, last_bytes - 1));
-	  RTX_UNCHANGING_P (mem) = dst_unchanging_p;
-	  MEM_IN_STRUCT_P (mem) = dst_in_struct_p;
-	  MEM_SCALAR_P (mem) = dst_scalar_p;
+	  mem = adjust_automodify_address (dstbase, QImode,
+					   plus_constant (dst, last_bytes - 1),
+					   dstoffset + last_bytes - 1);
 	  emit_move_insn (mem, gen_lowpart (QImode, part_bytes_reg));
 
 	  if (--last_bytes)
@@ -5434,10 +5434,7 @@ arm_gen_movstrqi (rtx *operands)
     {
       if (last_bytes > 1)
 	{
-	  mem = gen_rtx_MEM (HImode, dst);
-	  RTX_UNCHANGING_P (mem) = dst_unchanging_p;
-	  MEM_IN_STRUCT_P (mem) = dst_in_struct_p;
-	  MEM_SCALAR_P (mem) = dst_scalar_p;
+	  mem = adjust_automodify_address (dstbase, HImode, dst, dstoffset);
 	  emit_move_insn (mem, gen_lowpart (HImode, part_bytes_reg));
 	  last_bytes -= 2;
 	  if (last_bytes)
@@ -5447,15 +5444,13 @@ arm_gen_movstrqi (rtx *operands)
 	      emit_insn (gen_addsi3 (dst, dst, GEN_INT (2)));
 	      emit_insn (gen_lshrsi3 (tmp, part_bytes_reg, GEN_INT (16)));
 	      part_bytes_reg = tmp;
+	      dstoffset += 2;
 	    }
 	}
       
       if (last_bytes)
 	{
-	  mem = gen_rtx_MEM (QImode, dst);
-	  RTX_UNCHANGING_P (mem) = dst_unchanging_p;
-	  MEM_IN_STRUCT_P (mem) = dst_in_struct_p;
-	  MEM_SCALAR_P (mem) = dst_scalar_p;
+	  mem = adjust_automodify_address (dstbase, QImode, dst, dstoffset);
 	  emit_move_insn (mem, gen_lowpart (QImode, part_bytes_reg));
 	}
     }
@@ -7300,7 +7295,6 @@ output_call_mem (rtx *operands)
 
   return "";
 }
-
 
 /* Output a move from arm registers to an fpa registers.
    OPERANDS[0] is an fpa register.

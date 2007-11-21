@@ -62,7 +62,7 @@ extern rtx mips_subword (rtx, int);
 extern bool mips_split_64bit_move_p (rtx, rtx);
 extern void mips_split_64bit_move (rtx, rtx);
 extern const char *mips_output_move (rtx, rtx);
-extern rtx mips_gp_save_slot (void);
+extern void mips_restore_gp (void);
 #ifdef RTX_CODE
 extern rtx gen_int_relational (enum rtx_code, rtx, rtx, rtx, int *);
 extern void gen_conditional_branch (rtx *, enum rtx_code);
@@ -109,6 +109,9 @@ extern void mips_output_aligned_bss (FILE *, tree, const char *,
 extern void mips_output_aligned_decl_common (FILE *, tree, const char *,
 					     unsigned HOST_WIDE_INT,
 					     unsigned int);
+extern void mips_declare_common_object (FILE *, const char *,
+					const char *, unsigned HOST_WIDE_INT,
+					unsigned int, bool);
 extern void mips_declare_object (FILE *, const char *, const char *,
 				 const char *, ...);
 extern void mips_declare_object_name (FILE *, const char *, tree);

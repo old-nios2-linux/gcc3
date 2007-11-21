@@ -1708,6 +1708,7 @@ expand_builtin_mathfn (tree exp, rtx target, rtx subtarget)
       narg = save_expr (arg);
       if (narg != arg)
 	{
+	  arg = narg;
 	  arglist = build_tree_list (NULL_TREE, arg);
 	  exp = build_function_call_expr (fndecl, arglist);
 	}
@@ -1840,6 +1841,7 @@ expand_builtin_mathfn_2 (tree exp, rtx target, rtx subtarget)
   narg = save_expr (arg1);
   if (narg != arg1)
     {
+      arg1 = narg;
       temp = build_tree_list (NULL_TREE, narg);
       stable = false;
     }
@@ -1849,6 +1851,7 @@ expand_builtin_mathfn_2 (tree exp, rtx target, rtx subtarget)
   narg = save_expr (arg0);
   if (narg != arg0)
     {
+      arg0 = narg;
       arglist = tree_cons (NULL_TREE, narg, temp);
       stable = false;
     }
@@ -4326,14 +4329,15 @@ static rtx
 expand_builtin_fputs (tree arglist, rtx target, bool unlocked)
 {
   tree len, fn;
-  tree fn_fputc = unlocked ? implicit_built_in_decls[BUILT_IN_FPUTC_UNLOCKED]
+  /* If we're using an unlocked function, assume the other unlocked
+     functions exist explicitly.  */
+  tree const fn_fputc = unlocked ? built_in_decls[BUILT_IN_FPUTC_UNLOCKED]
     : implicit_built_in_decls[BUILT_IN_FPUTC];
-  tree fn_fwrite = unlocked ? implicit_built_in_decls[BUILT_IN_FWRITE_UNLOCKED]
+  tree const fn_fwrite = unlocked ? built_in_decls[BUILT_IN_FWRITE_UNLOCKED]
     : implicit_built_in_decls[BUILT_IN_FWRITE];
 
-  /* If the return value is used, or the replacement _DECL isn't
-     initialized, don't do the transformation.  */
-  if (target != const0_rtx || !fn_fputc || !fn_fwrite)
+  /* If the return value is used, don't do the transformation.  */
+  if (target != const0_rtx)
     return 0;
 
   /* Verify the arguments in the original call.  */
@@ -4393,6 +4397,11 @@ expand_builtin_fputs (tree arglist, rtx target, bool unlocked)
     default:
       abort ();
     }
+
+  /* If the replacement _DECL isn't initialized, don't do the
+     transformation.  */
+  if (!fn)
+    return 0;
 
   return expand_expr (build_function_call_expr (fn, arglist),
 		      const0_rtx, VOIDmode, EXPAND_NORMAL);
@@ -4648,11 +4657,12 @@ static rtx
 expand_builtin_printf (tree arglist, rtx target, enum machine_mode mode,
 		       bool unlocked)
 {
-  tree fn_putchar = unlocked
-		    ? implicit_built_in_decls[BUILT_IN_PUTCHAR_UNLOCKED]
-		    : implicit_built_in_decls[BUILT_IN_PUTCHAR];
-  tree fn_puts = unlocked ? implicit_built_in_decls[BUILT_IN_PUTS_UNLOCKED]
-			  : implicit_built_in_decls[BUILT_IN_PUTS];
+  /* If we're using an unlocked function, assume the other unlocked
+     functions exist explicitly.  */
+  tree const fn_putchar = unlocked ? built_in_decls[BUILT_IN_PUTCHAR_UNLOCKED]
+    : implicit_built_in_decls[BUILT_IN_PUTCHAR];
+  tree const fn_puts = unlocked ? built_in_decls[BUILT_IN_PUTS_UNLOCKED]
+    : implicit_built_in_decls[BUILT_IN_PUTS];
   const char *fmt_str;
   tree fn, fmt, arg;
 
@@ -4751,10 +4761,12 @@ static rtx
 expand_builtin_fprintf (tree arglist, rtx target, enum machine_mode mode,
 		        bool unlocked)
 {
-  tree fn_fputc = unlocked ? implicit_built_in_decls[BUILT_IN_FPUTC_UNLOCKED]
-			   : implicit_built_in_decls[BUILT_IN_FPUTC];
-  tree fn_fputs = unlocked ? implicit_built_in_decls[BUILT_IN_FPUTS_UNLOCKED]
-			   : implicit_built_in_decls[BUILT_IN_FPUTS];
+  /* If we're using an unlocked function, assume the other unlocked
+     functions exist explicitly.  */
+  tree const fn_fputc = unlocked ? built_in_decls[BUILT_IN_FPUTC_UNLOCKED]
+    : implicit_built_in_decls[BUILT_IN_FPUTC];
+  tree const fn_fputs = unlocked ? built_in_decls[BUILT_IN_FPUTS_UNLOCKED]
+    : implicit_built_in_decls[BUILT_IN_FPUTS];
   const char *fmt_str;
   tree fn, fmt, fp, arg;
 
@@ -6581,7 +6593,7 @@ fold_builtin (tree exp)
 	      return build_function_call_expr (expfn, arglist);
 	    }
 
-	  /* Optimize sqrt(pow(x,y)) = pow(x,y*0.5).  */
+	  /* Optimize sqrt(pow(x,y)) = pow(|x|,y*0.5).  */
 	  if (flag_unsafe_math_optimizations
 	      && (fcode == BUILT_IN_POW
 		  || fcode == BUILT_IN_POWF
@@ -6590,8 +6602,11 @@ fold_builtin (tree exp)
 	      tree powfn = TREE_OPERAND (TREE_OPERAND (arg, 0), 0);
 	      tree arg0 = TREE_VALUE (TREE_OPERAND (arg, 1));
 	      tree arg1 = TREE_VALUE (TREE_CHAIN (TREE_OPERAND (arg, 1)));
-	      tree narg1 = fold (build (MULT_EXPR, type, arg1,
-					build_real (type, dconsthalf)));
+	      tree narg1;
+	      if (!tree_expr_nonnegative_p (arg0))
+		arg0 = build1 (ABS_EXPR, type, arg0);
+	      narg1 = fold (build (MULT_EXPR, type, arg1,
+				   build_real (type, dconsthalf)));
 	      arglist = tree_cons (NULL_TREE, arg0,
 				   build_tree_list (NULL_TREE, narg1));
 	      return build_function_call_expr (powfn, arglist);

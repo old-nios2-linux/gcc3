@@ -53,13 +53,13 @@
 <h1><a name="report">Reporting Bugs</a></h1>
 
 <p>The main purpose of a bug report is to enable us to fix the bug. The
-most important prerequisite for this is that the report must be complete and
-self-contained, which we explain in detail below.</p>
+most important prerequisite for this is that the report must be complete
+and self-contained.</p>
 
 <p>Before you report a bug, please check the 
-<a href="#known">list of well-known bugs</a> and, <strong>if possible
-in any way, try a current development snapshot</strong>.
-If you want to report a bug with versions of GCC before 3.1 we strongly
+<a href="#known">list of well-known bugs</a> and, <strong>if possible,
+try a current development snapshot</strong>.
+If you want to report a bug with versions of GCC before 3.4 we strongly
 recommend upgrading to the current release first.</p>
 
 <p>Before reporting that GCC compiles your code incorrectly, please
@@ -116,10 +116,6 @@ three of which can be obtained from the output of <code>gcc -v</code>:</p>
   a successful compilation; this is a symptom of a hardware problem,
   not of a compiler bug (sorry)</li>
 
-  <li>E-mail messages that complement previous, incomplete bug
-  reports. Post a new, self-contained, full bug report instead, if
-  possible as a follow-up to the original bug report</li>
-
   <li>Assembly files (<code>*.s</code>) produced by the compiler, or any
   binary files, such as object files, executables, core files, or
   precompiled header files</li>
@@ -163,17 +159,6 @@ preprocessed file it generates.</p>
 <blockquote><p><code>gcc -v -save-temps <i>all-your-options
 source-file</i></code></p></blockquote>
 
-<p>Typically the preprocessed file (extension <code>.i</code> for C or
-<code>.ii</code> for C++, and <code>.f</code> if the preprocessor is used on
-Fortran files) will be large, so please compress the
-resulting file with one of the popular compression programs such as
-bzip2, gzip, zip or compress (in
-decreasing order of preference).  Use maximum compression
-(<code>-9</code>) if available.  Please include the compressed
-preprocessor output in your bug report, even if the source code is
-freely available elsewhere; it makes the job of our volunteer testers
-much easier.</p>
-
 <p>The <b>only</b> excuses to not send us the preprocessed sources are
 (i) if you've found a bug in the preprocessor, (ii) if you've reduced
 the testcase to a small file that doesn't include any other file or
@@ -186,12 +171,6 @@ then try to create a small file that triggers the same problem.</p>
 it in the bug report, although you may want to post parts of it to
 point out assembly code you consider to be wrong.</p>
 
-<p>Whether to use MIME attachments or <code>uuencode</code> is up to
-you.  In any case, make sure the compiler command line, version and
-error output are in plain text, so that we don't have to decode the
-bug report in order to tell who should take care of it.  A meaningful
-subject indicating language and platform also helps.</p>
-
 <p>Please avoid posting an archive (.tar, .shar or .zip); we generally
 need just a single file to reproduce the bug (the .i/.ii/.f preprocessed
 file), and, by storing it in an archive, you're just making our
@@ -203,16 +182,6 @@ we need the main file and all <code>INCLUDE</code>d files.  In any case,
 make sure the compiler version, error message, etc, are included in
 the body of your bug report as plain text, even if needlessly
 duplicated as part of an archive.</p>
-
-<p>If you fail to supply enough information for a bug report to be
-reproduced, someone will probably ask you to post additional
-information (or just ignore your bug report, if they're in a bad day,
-so try to get it right on the first posting :-).  In this case, please
-post the additional information to the bug reporting mailing list, not
-just to the person who requested it, unless explicitly told so.  If
-possible, please include in this follow-up all the information you had
-supplied in the incomplete bug report (including the preprocessor
-output), so that the new bug report is self-contained.</p>
 
 <h2><a name="gnat">Detailed bug reporting instructions for GNAT</a></h2>
 
@@ -390,7 +359,7 @@ The work-around was to omit the parentheses:</p>
 return A();
 </pre></blockquote>
 
-<p>This problem occured in a number of variants; in <code>throw</code>
+<p>This problem occurred in a number of variants; in <code>throw</code>
 statements, people also frequently put the object in parentheses.</p></dd>
 
 </dl>
@@ -458,6 +427,38 @@ for more information.</p></dd>
 <h2><a name="nonbugs_c">C</a></h2>
 
 <dl>
+<dt>Increment/decrement operator (<code>++</code>/<code>--</code>) not
+working as expected - a <a href="http://gcc.gnu.org/PR11751">problem with
+many variations</a>.</dt>
+
+<dd><p>The following expressions have unpredictable results:</p>
+<blockquote><pre>
+x[i]=++i
+foo(i,++i)
+i*(++i)                 /* special case with foo=="operator*" */
+std::cout &lt;&lt; i &lt;&lt; ++i   /* foo(foo(std::cout,i),++i)          */
+</pre></blockquote>
+<p>since the <code>i</code> without increment can be evaluated before or
+after <code>++i</code>.</p>
+
+<p>The C and C++ standards have the notion of "sequence points". Everything
+that happens between two sequence points happens in an unspecified order,
+but it has to happen after the first and before the second sequence point.
+The end of a statement and a function call are examples for sequence points,
+whereas assignments and the comma between function arguments are not.</p>
+
+<p>Modifying a value twice between two sequence points as shown in the
+following examples is even worse:</p>
+<blockquote><pre>
+i=++i
+foo(++i,++i)
+(++i)*(++i)               /* special case with foo=="operator*" */
+std::cout &lt;&lt; ++i &lt;&lt; ++i   /* foo(foo(std::cout,++i),++i)        */
+</pre></blockquote>
+<p>This leads to undefined behavior (i.e. the compiler can do
+anything).</p></dd>
+
+
 <dt>Casting does not work as expected when optimization is turned on.</dt>
 
 <dd><p>This is often caused by a violation of aliasing rules, which are part
@@ -747,8 +748,8 @@ also contain C++ code, so you might want to recompile all libraries to
 be safe.  It should not be necessary to recompile if you have changed
 to a bug-fix release of the same version of the compiler; bug-fix
 releases are careful to avoid ABI changes. See also the
-<a href="onlinedocs/gcc/Compatibility.html">compatibility section</a>
-of the GCC manual.</p>
+<a href="http://gcc.gnu.org/onlinedocs/gcc/Compatibility.html">compatibility
+section</a> of the GCC manual.</p>
 
 <p>Remark: A major release is designated by a change to the first or second
 component of the two- or three-part version number.  A minor (bug-fix)
@@ -900,8 +901,8 @@ template &lt;typename T&gt; struct B : A&lt;T&gt;
 </ul>
 
 <p>In addition to the problems listed above, the manual contains a section on
-<a href="http://gcc.gnu.org/onlinedocs/gcc/C---Misunderstandings.html">Common
-Misunderstandings with GNU C++</a>.</p>
+<a href="http://gcc.gnu.org/onlinedocs/gcc/C_002b_002b-Misunderstandings.html">
+Common Misunderstandings with GNU C++</a>.</p>
 
 </body>
 </html>

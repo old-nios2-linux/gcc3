@@ -104,7 +104,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 
    life_analysis fills in certain vectors containing information about
    register usage: REG_N_REFS, REG_N_DEATHS, REG_N_SETS, REG_LIVE_LENGTH,
-   REG_N_CALLS_CROSSED and REG_BASIC_BLOCK.
+   REG_N_CALLS_CROSSED, REG_N_THROWING_CALLS_CROSSED and REG_BASIC_BLOCK.
 
    life_analysis sets current_function_sp_is_unchanging if the function
    doesn't modify the stack pointer.  */
@@ -407,7 +407,7 @@ life_analysis (rtx f, FILE *file, int flags)
 
 #ifdef CANNOT_CHANGE_MODE_CLASS
   if (flags & PROP_REG_INFO)
-    bitmap_initialize (&subregs_of_mode, 1);
+    init_subregs_of_mode ();
 #endif
 
   if (! optimize)
@@ -1470,6 +1470,7 @@ allocate_reg_life_data (void)
       REG_N_REFS (i) = 0;
       REG_N_DEATHS (i) = 0;
       REG_N_CALLS_CROSSED (i) = 0;
+      REG_N_THROWING_CALLS_CROSSED (i) = 0;
       REG_LIVE_LENGTH (i) = 0;
       REG_FREQ (i) = 0;
       REG_BASIC_BLOCK (i) = REG_BLOCK_UNKNOWN;
@@ -1591,7 +1592,7 @@ propagate_one_insn (struct propagate_block_info *pbi, rtx insn)
       pbi->cc0_live = 0;
 
       if (libcall_is_dead)
-	prev = propagate_block_delete_libcall ( insn, note);
+	prev = propagate_block_delete_libcall (insn, note);
       else
 	{
 
@@ -1688,8 +1689,13 @@ propagate_one_insn (struct propagate_block_info *pbi, rtx insn)
 	 record this for them.  */
 
       if (GET_CODE (insn) == CALL_INSN && (flags & PROP_REG_INFO))
-	EXECUTE_IF_SET_IN_REG_SET (pbi->reg_live, 0, i,
-				   { REG_N_CALLS_CROSSED (i)++; });
+	{
+	  EXECUTE_IF_SET_IN_REG_SET (pbi->reg_live, 0, i,
+				     { REG_N_CALLS_CROSSED (i)++; });
+	  if (can_throw_internal (insn))
+	    EXECUTE_IF_SET_IN_REG_SET (pbi->reg_live, 0, i,
+				     { REG_N_THROWING_CALLS_CROSSED (i)++; });
+	}
 
       /* Record sets.  Do this even for dead instructions, since they
 	 would have killed the values if they hadn't been deleted.  */
@@ -2268,7 +2274,7 @@ libcall_dead_p (struct propagate_block_info *pbi, rtx note, rtx insn)
     {
       rtx r = SET_SRC (x);
 
-      if (GET_CODE (r) == REG)
+      if (GET_CODE (r) == REG || GET_CODE (r) == SUBREG)
 	{
 	  rtx call = XEXP (note, 0);
 	  rtx call_pat;
@@ -2302,10 +2308,20 @@ libcall_dead_p (struct propagate_block_info *pbi, rtx note, rtx insn)
 	      call_pat = XVECEXP (call_pat, 0, i);
 	    }
 
-	  return insn_dead_p (pbi, call_pat, 1, REG_NOTES (call));
+	  if (! insn_dead_p (pbi, call_pat, 1, REG_NOTES (call)))
+	    return 0;
+
+	  while ((insn = PREV_INSN (insn)) != call)
+	    {
+	      if (! INSN_P (insn))
+		continue;
+	      if (! insn_dead_p (pbi, PATTERN (insn), 0, REG_NOTES (insn)))
+		return 0;
+	    }
+	  return 1;
 	}
     }
-  return 1;
+  return 0;
 }
 
 /* Return 1 if register REGNO was used before it was set, i.e. if it is
@@ -3355,7 +3371,11 @@ attempt_auto_inc (struct propagate_block_info *pbi, rtx inc, rtx insn,
 	 that REGNO now crosses them.  */
       for (temp = insn; temp != incr; temp = NEXT_INSN (temp))
 	if (GET_CODE (temp) == CALL_INSN)
-	  REG_N_CALLS_CROSSED (regno)++;
+	  {
+	    REG_N_CALLS_CROSSED (regno)++;
+	    if (can_throw_internal (temp))
+	      REG_N_THROWING_CALLS_CROSSED (regno)++;
+	  }
 
       /* Invalidate alias info for Q since we just changed its value.  */
       clear_reg_alias_info (q);
@@ -3776,12 +3796,8 @@ mark_used_regs (struct propagate_block_info *pbi, rtx x, rtx cond, rtx insn)
 
     case SUBREG:
 #ifdef CANNOT_CHANGE_MODE_CLASS
-      if ((flags & PROP_REG_INFO)
-	  && GET_CODE (SUBREG_REG (x)) == REG
-	  && REGNO (SUBREG_REG (x)) >= FIRST_PSEUDO_REGISTER)
-	bitmap_set_bit (&subregs_of_mode, REGNO (SUBREG_REG (x))
-					  * MAX_MACHINE_MODE
-					  + GET_MODE (x));
+      if (flags & PROP_REG_INFO)
+	record_subregs_of_mode (x);
 #endif
 
       /* While we're here, optimize this case.  */
@@ -3826,13 +3842,8 @@ mark_used_regs (struct propagate_block_info *pbi, rtx x, rtx cond, rtx insn)
 	       || GET_CODE (testreg) == SUBREG)
 	  {
 #ifdef CANNOT_CHANGE_MODE_CLASS
-	    if ((flags & PROP_REG_INFO)
-		&& GET_CODE (testreg) == SUBREG
-		&& GET_CODE (SUBREG_REG (testreg)) == REG
-		&& REGNO (SUBREG_REG (testreg)) >= FIRST_PSEUDO_REGISTER)
-	      bitmap_set_bit (&subregs_of_mode, REGNO (SUBREG_REG (testreg))
-						* MAX_MACHINE_MODE
-						+ GET_MODE (testreg));
+	    if ((flags & PROP_REG_INFO) && GET_CODE (testreg) == SUBREG)
+	      record_subregs_of_mode (testreg);
 #endif
 
 	    /* Modifying a single register in an alternate mode

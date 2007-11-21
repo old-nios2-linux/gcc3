@@ -3525,3 +3525,52 @@ m68k_output_mi_thunk (FILE *file, tree thunk ATTRIBUTE_UNUSED,
 
   output_asm_insn (fmt, xops);
 }
+
+/* Return nonzero if register old_reg can be renamed to register new_reg.  */
+int
+m68k_hard_regno_rename_ok (unsigned int old_reg ATTRIBUTE_UNUSED,
+			   unsigned int new_reg)
+{
+  /* Interrupt functions can only use registers that have already been
+     saved by the prologue, even if they would normally be
+     call-clobbered.  */
+
+  if (m68k_interrupt_function_p (current_function_decl)
+      && !regs_ever_live[new_reg])
+    return 0;
+
+  return 1;
+}
+
+/* Value is true if hard register REGNO can hold a value of machine-mode MODE.
+   On the 68000, the cpu registers can hold any mode except bytes in address
+   registers, but the 68881 registers can hold only SFmode or DFmode.  */
+bool
+m68k_regno_mode_ok (int regno, enum machine_mode mode)
+{
+  if (regno < 8)
+    {
+	/* Data Registers, can hold aggregate if fits in.  */
+	if (regno + GET_MODE_SIZE (mode) / 4 <= 8)
+	  return true;
+    }
+  else if (regno < 16)
+    {
+	/* Address Registers, can't hold bytes, can hold aggregate if
+	   fits in.  */
+	if (GET_MODE_SIZE (mode) == 1)
+	  return false;
+	if (regno + GET_MODE_SIZE (mode) / 4 <= 16)
+	  return true;
+    }
+  else if (regno < 24)
+    {
+      /* FPU registers, hold float or complex float of long double or
+	   smaller.  */
+	if ((GET_MODE_CLASS (mode) == MODE_FLOAT
+	     || GET_MODE_CLASS (mode) == MODE_COMPLEX_FLOAT)
+	    && GET_MODE_UNIT_SIZE (mode) <= 12)
+	  return true;
+    }
+  return false;
+}

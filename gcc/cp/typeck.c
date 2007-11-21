@@ -1,6 +1,6 @@
 /* Build expressions with type checking for C++ compiler.
    Copyright (C) 1987, 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
    Hacked by Michael Tiemann (tiemann@cygnus.com)
 
 This file is part of GCC.
@@ -94,6 +94,9 @@ require_complete_type (tree value)
     type = unknown_type_node;
   else
     type = TREE_TYPE (value);
+
+  if (type == error_mark_node)
+    return error_mark_node;
 
   /* First, detect a valid value with a complete type.  */
   if (COMPLETE_TYPE_P (type))
@@ -265,10 +268,12 @@ type_after_usual_arithmetic_conversions (tree t1, tree t2)
   /* FIXME: Attributes.  */
   my_friendly_assert (ARITHMETIC_TYPE_P (t1) 
 		      || TREE_CODE (t1) == COMPLEX_TYPE
+		      || TREE_CODE (t1) == VECTOR_TYPE
 		      || TREE_CODE (t1) == ENUMERAL_TYPE,
 		      19990725);
   my_friendly_assert (ARITHMETIC_TYPE_P (t2) 
 		      || TREE_CODE (t2) == COMPLEX_TYPE
+		      || TREE_CODE (t2) == VECTOR_TYPE
 		      || TREE_CODE (t2) == ENUMERAL_TYPE,
 		      19990725);
 
@@ -294,6 +299,16 @@ type_after_usual_arithmetic_conversions (tree t1, tree t2)
       else
 	return build_type_attribute_variant (build_complex_type (subtype),
 					     attributes);
+    }
+
+  if (code1 == VECTOR_TYPE)
+    {
+      /* When we get here we should have two vectors of the same size.
+	 Just prefer the unsigned one if present.  */
+      if (TREE_UNSIGNED (t1))
+	return build_type_attribute_variant (t1, attributes);
+      else
+	return build_type_attribute_variant (t2, attributes);
     }
 
   /* If only one is real, use it as the result.  */
@@ -745,9 +760,9 @@ common_type (tree t1, tree t2)
   code2 = TREE_CODE (t2);
 
   if ((ARITHMETIC_TYPE_P (t1) || code1 == ENUMERAL_TYPE
-       || code1 == COMPLEX_TYPE)
+       || code1 == COMPLEX_TYPE || code1 == VECTOR_TYPE)
       && (ARITHMETIC_TYPE_P (t2) || code2 == ENUMERAL_TYPE
-	  || code2 == COMPLEX_TYPE))
+	  || code2 == COMPLEX_TYPE || code2 == VECTOR_TYPE))
     return type_after_usual_arithmetic_conversions (t1, t2);
 
   else if ((TYPE_PTR_P (t1) && TYPE_PTR_P (t2))
@@ -1216,7 +1231,7 @@ cxx_sizeof_or_alignof_type (tree type, enum tree_code op, bool complain)
   if (type == error_mark_node)
     return error_mark_node;
   
-  if (processing_template_decl)
+  if (dependent_type_p (type))
     {
       value = build_min (op, size_type_node, type);
       TREE_READONLY (value) = 1;
@@ -2878,9 +2893,9 @@ build_binary_op (enum tree_code code, tree orig_op0, tree orig_op1,
     case ROUND_DIV_EXPR:
     case EXACT_DIV_EXPR:
       if ((code0 == INTEGER_TYPE || code0 == REAL_TYPE
-	   || code0 == COMPLEX_TYPE)
+	   || code0 == COMPLEX_TYPE || code0 == VECTOR_TYPE)
 	  && (code1 == INTEGER_TYPE || code1 == REAL_TYPE
-	      || code1 == COMPLEX_TYPE))
+	      || code1 == COMPLEX_TYPE || code1 == VECTOR_TYPE))
 	{
 	  if (TREE_CODE (op1) == INTEGER_CST && integer_zerop (op1))
 	    warning ("division by zero in `%E / 0'", op0);
@@ -2907,7 +2922,8 @@ build_binary_op (enum tree_code code, tree orig_op0, tree orig_op1,
     case BIT_AND_EXPR:
     case BIT_IOR_EXPR:
     case BIT_XOR_EXPR:
-      if (code0 == INTEGER_TYPE && code1 == INTEGER_TYPE)
+      if ((code0 == INTEGER_TYPE && code1 == INTEGER_TYPE)
+	  || (code0 == VECTOR_TYPE && code1 == VECTOR_TYPE))
 	shorten = -1;
       break;
 
@@ -3158,11 +3174,16 @@ build_binary_op (enum tree_code code, tree orig_op0, tree orig_op1,
       break;
     }
 
-  if ((code0 == INTEGER_TYPE || code0 == REAL_TYPE || code0 == COMPLEX_TYPE)
-      &&
-      (code1 == INTEGER_TYPE || code1 == REAL_TYPE || code1 == COMPLEX_TYPE))
+  if (((code0 == INTEGER_TYPE || code0 == REAL_TYPE || code0 == COMPLEX_TYPE)
+       &&
+       (code1 == INTEGER_TYPE || code1 == REAL_TYPE || code1 == COMPLEX_TYPE))
+      || (code0 == VECTOR_TYPE && code1 == VECTOR_TYPE))
     {
       int none_complex = (code0 != COMPLEX_TYPE && code1 != COMPLEX_TYPE);
+
+      if (code0 == VECTOR_TYPE && code1 == VECTOR_TYPE
+          && !tree_int_cst_equal (TYPE_SIZE (type0), TYPE_SIZE (type1)))
+	error ("can't convert between vector values of different size");
 
       if (shorten || common || short_compare)
 	result_type = common_type (type0, type1);
@@ -3458,7 +3479,7 @@ build_binary_op (enum tree_code code, tree orig_op0, tree orig_op1,
     tree result = build (resultcode, build_type, op0, op1);
     tree folded;
 
-    folded = fold (result);
+    folded = fold_if_not_in_template (result);
     if (folded == result)
       TREE_CONSTANT (folded) = TREE_CONSTANT (op0) & TREE_CONSTANT (op1);
     if (final_type != 0)
@@ -3548,6 +3569,7 @@ build_x_unary_op (enum tree_code code, tree xarg)
     {
       if (type_dependent_expression_p (xarg))
 	return build_min_nt (code, xarg, NULL_TREE);
+
       xarg = build_non_dependent_expr (xarg);
     }
 
@@ -3609,13 +3631,13 @@ build_x_unary_op (enum tree_code code, tree xarg)
       else if (TREE_CODE (xarg) == TARGET_EXPR)
 	warning ("taking address of temporary");
       exp = build_unary_op (ADDR_EXPR, xarg, 0);
-      if (TREE_CODE (exp) == ADDR_EXPR)
-	PTRMEM_OK_P (exp) = ptrmem;
     }
 
   if (processing_template_decl && exp != error_mark_node)
-    return build_min_non_dep (code, exp, orig_expr,
-			      /*For {PRE,POST}{INC,DEC}REMENT_EXPR*/NULL_TREE);
+    exp = build_min_non_dep (code, exp, orig_expr,
+			     /*For {PRE,POST}{INC,DEC}REMENT_EXPR*/NULL_TREE);
+  if (TREE_CODE (exp) == ADDR_EXPR)
+    PTRMEM_OK_P (exp) = ptrmem;
   return exp;
 }
 
@@ -4077,6 +4099,7 @@ build_unary_op (enum tree_code code, tree xarg, int noconvert)
 	 is an error.  */
       else if (TREE_CODE (argtype) != FUNCTION_TYPE
 	       && TREE_CODE (argtype) != METHOD_TYPE
+	       && TREE_CODE (arg) != OFFSET_REF
 	       && !lvalue_or_else (arg, "unary `&'"))
 	return error_mark_node;
 
@@ -4091,7 +4114,11 @@ build_unary_op (enum tree_code code, tree xarg, int noconvert)
 	       expression so we can just form an ADDR_EXPR with the
 	       correct type.  */
 	    || processing_template_decl)
-	  addr = build_address (arg);
+	  {
+	    addr = build_address (arg);
+	    if (TREE_CODE (arg) == OFFSET_REF)
+	      PTRMEM_OK_P (addr) = PTRMEM_OK_P (arg);
+	  }
 	else if (TREE_CODE (TREE_OPERAND (arg, 1)) == BASELINK)
 	  {
 	    tree fn = BASELINK_FUNCTIONS (TREE_OPERAND (arg, 1));
@@ -4160,7 +4187,8 @@ build_unary_op (enum tree_code code, tree xarg, int noconvert)
    for certain kinds of expressions which are not really lvalues
    but which we can accept as lvalues.
 
-   If ARG is not a kind of expression we can handle, return zero.  */
+   If ARG is not a kind of expression we can handle, return
+   NULL_TREE.  */
    
 tree
 unary_complex_lvalue (enum tree_code code, tree arg)
@@ -4769,7 +4797,7 @@ build_const_cast (tree type, tree expr)
 {
   tree intype;
 
-  if (type == error_mark_node || expr == error_mark_node)
+  if (type == error_mark_node || error_operand_p (expr))
     return error_mark_node;
 
   if (processing_template_decl)
@@ -5509,7 +5537,10 @@ build_ptrmemfunc (tree type, tree pfn, int force)
 	}
 
       /* Just adjust the DELTA field.  */
-      my_friendly_assert (TREE_TYPE (delta) == ptrdiff_type_node, 20030727);
+      my_friendly_assert 
+	(same_type_ignoring_top_level_qualifiers_p (TREE_TYPE (delta),
+						    ptrdiff_type_node), 
+	 20030727);
       if (TARGET_PTRMEMFUNC_VBIT_LOCATION == ptrmemfunc_vbit_in_delta)
 	n = cp_build_binary_op (LSHIFT_EXPR, n, integer_one_node);
       delta = cp_build_binary_op (PLUS_EXPR, delta, n);
@@ -6056,6 +6087,15 @@ check_return_expr (tree retval)
     /* Remember that this function did return a value.  */
     current_function_returns_value = 1;
 
+  /* Check for erroneous operands -- but after giving ourselves a
+     chance to provide an error about returning a value from a void
+     function.  */
+  if (error_operand_p (retval))
+    {
+      current_function_return_value = error_mark_node;
+      return error_mark_node;
+    }
+
   /* Only operator new(...) throw(), can return NULL [expr.new/13].  */
   if ((DECL_OVERLOADED_OPERATOR_P (current_function_decl) == NEW_EXPR
        || DECL_OVERLOADED_OPERATOR_P (current_function_decl) == VEC_NEW_EXPR)
@@ -6112,8 +6152,8 @@ check_return_expr (tree retval)
 
   /* We don't need to do any conversions when there's nothing being
      returned.  */
-  if (!retval || retval == error_mark_node)
-    return retval;
+  if (!retval)
+    return NULL_TREE;
 
   /* Do any required conversions.  */
   if (retval == result || DECL_CONSTRUCTOR_P (current_function_decl))
@@ -6304,11 +6344,6 @@ casts_away_constness_r (tree *t1, tree *t2)
      and pointers to members (conv.qual), the "member" aspect of a
      pointer to member level is ignored when determining if a const
      cv-qualifier has been cast away.  */
-  if (TYPE_PTRMEM_P (*t1))
-    *t1 = build_pointer_type (TYPE_PTRMEM_POINTED_TO_TYPE (*t1));
-  if (TYPE_PTRMEM_P (*t2))
-    *t2 = build_pointer_type (TYPE_PTRMEM_POINTED_TO_TYPE (*t2));
-
   /* [expr.const.cast]
 
      For  two  pointer types:
@@ -6326,9 +6361,8 @@ casts_away_constness_r (tree *t1, tree *t2)
      to
 
             Tcv2,(M-K+1) * cv2,(M-K+2) * ... cv2,M *.  */
-
-  if (TREE_CODE (*t1) != POINTER_TYPE
-      || TREE_CODE (*t2) != POINTER_TYPE)
+  if ((!TYPE_PTR_P (*t1) && !TYPE_PTRMEM_P (*t1))
+      || (!TYPE_PTR_P (*t2) && !TYPE_PTRMEM_P (*t2)))
     {
       *t1 = cp_build_qualified_type (void_type_node,
 				     cp_type_quals (*t1));
@@ -6339,8 +6373,16 @@ casts_away_constness_r (tree *t1, tree *t2)
   
   quals1 = cp_type_quals (*t1);
   quals2 = cp_type_quals (*t2);
-  *t1 = TREE_TYPE (*t1);
-  *t2 = TREE_TYPE (*t2);
+
+  if (TYPE_PTRMEM_P (*t1))
+    *t1 = TYPE_PTRMEM_POINTED_TO_TYPE (*t1);
+  else
+    *t1 = TREE_TYPE (*t1);
+  if (TYPE_PTRMEM_P (*t2))
+    *t2 = TYPE_PTRMEM_POINTED_TO_TYPE (*t2);
+  else
+    *t2 = TREE_TYPE (*t2);
+
   casts_away_constness_r (t1, t2);
   *t1 = build_pointer_type (*t1);
   *t2 = build_pointer_type (*t2);

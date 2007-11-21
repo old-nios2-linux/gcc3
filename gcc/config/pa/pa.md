@@ -2378,9 +2378,9 @@
         (match_operand:SI 3 "register_operand" ""))]
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
-   && REG_OK_FOR_BASE_P (operands[1])
-   && (TARGET_NO_SPACE_REGS
-       || (!REG_POINTER (operands[1]) && REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_INDEX_P (operands[1])
+   && REG_OK_FOR_BASE_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:SI (plus:SI (match_dup 1) (match_dup 2)))
 	(match_dup 3))
@@ -2395,9 +2395,9 @@
         (match_operand:SI 3 "register_operand" ""))]
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
-   && REG_OK_FOR_BASE_P (operands[2])
-   && (TARGET_NO_SPACE_REGS
-       || (REG_POINTER (operands[1]) && !REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_BASE_P (operands[1])
+   && REG_OK_FOR_INDEX_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:SI (plus:SI (match_dup 2) (match_dup 1)))
 	(match_dup 3))
@@ -2413,9 +2413,9 @@
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
    && TARGET_64BIT
-   && REG_OK_FOR_BASE_P (operands[1])
-   && (TARGET_NO_SPACE_REGS
-       || (!REG_POINTER (operands[1]) && REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_INDEX_P (operands[1])
+   && REG_OK_FOR_BASE_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:SI (plus:DI (match_dup 1) (match_dup 2)))
 	(match_dup 3))
@@ -2431,9 +2431,9 @@
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
    && TARGET_64BIT
-   && REG_OK_FOR_BASE_P (operands[2])
-   && (TARGET_NO_SPACE_REGS
-       || (REG_POINTER (operands[1]) && !REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_BASE_P (operands[1])
+   && REG_OK_FOR_INDEX_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:SI (plus:DI (match_dup 2) (match_dup 1)))
 	(match_dup 3))
@@ -2877,9 +2877,9 @@
 
 (define_insn ""
   [(set (match_operand:HI 0 "move_dest_operand"
-	 		  "=r,r,r,r,r,Q,!*q,!r,!*f")
+	 		  "=r,r,r,r,r,Q,!*q,!r")
 	(match_operand:HI 1 "move_src_operand"
-			  "r,J,N,K,RQ,rM,!rM,!*q,!*fM"))]
+			  "r,J,N,K,RQ,rM,!rM,!*q"))]
   "register_operand (operands[0], HImode)
    || reg_or_0_operand (operands[1], HImode)"
   "@
@@ -2890,11 +2890,10 @@
    ldh%M1 %1,%0
    sth%M0 %r1,%0
    mtsar %r1
-   {mfctl|mfctl,w} %sar,%0
-   fcpy,sgl %f1,%0"
-  [(set_attr "type" "move,move,move,shift,load,store,move,move,fpalu")
+   {mfctl|mfctl,w} %sar,%0"
+  [(set_attr "type" "move,move,move,shift,load,store,move,move")
    (set_attr "pa_combine_type" "addmove")
-   (set_attr "length" "4,4,4,4,4,4,4,4,4")])
+   (set_attr "length" "4,4,4,4,4,4,4,4")])
 
 (define_insn ""
   [(set (match_operand:HI 0 "register_operand" "=r")
@@ -3002,9 +3001,9 @@
 
 (define_insn ""
   [(set (match_operand:QI 0 "move_dest_operand"
-			  "=r,r,r,r,r,Q,!*q,!r,!*f")
+			  "=r,r,r,r,r,Q,!*q,!r")
 	(match_operand:QI 1 "move_src_operand"
-			  "r,J,N,K,RQ,rM,!rM,!*q,!*fM"))]
+			  "r,J,N,K,RQ,rM,!rM,!*q"))]
   "register_operand (operands[0], QImode)
    || reg_or_0_operand (operands[1], QImode)"
   "@
@@ -3015,11 +3014,10 @@
    ldb%M1 %1,%0
    stb%M0 %r1,%0
    mtsar %r1
-   {mfctl|mfctl,w} %%sar,%0
-   fcpy,sgl %f1,%0"
-  [(set_attr "type" "move,move,move,shift,load,store,move,move,fpalu")
+   {mfctl|mfctl,w} %%sar,%0"
+  [(set_attr "type" "move,move,move,shift,load,store,move,move")
    (set_attr "pa_combine_type" "addmove")
-   (set_attr "length" "4,4,4,4,4,4,4,4,4")])
+   (set_attr "length" "4,4,4,4,4,4,4,4")])
 
 (define_insn ""
   [(set (match_operand:QI 0 "register_operand" "=r")
@@ -3898,9 +3896,9 @@
         (match_operand:DF 3 "register_operand" ""))]
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
-   && REG_OK_FOR_BASE_P (operands[1])
-   && (TARGET_NO_SPACE_REGS
-       || (!REG_POINTER (operands[1]) && REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_INDEX_P (operands[1])
+   && REG_OK_FOR_BASE_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:DF (plus:SI (match_dup 1) (match_dup 2)))
 	(match_dup 3))
@@ -3915,9 +3913,9 @@
         (match_operand:DF 3 "register_operand" ""))]
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
-   && REG_OK_FOR_BASE_P (operands[2])
-   && (TARGET_NO_SPACE_REGS
-       || (REG_POINTER (operands[1]) && !REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_BASE_P (operands[1])
+   && REG_OK_FOR_INDEX_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:DF (plus:SI (match_dup 2) (match_dup 1)))
 	(match_dup 3))
@@ -3933,9 +3931,9 @@
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
    && TARGET_64BIT
-   && REG_OK_FOR_BASE_P (operands[1])
-   && (TARGET_NO_SPACE_REGS
-       || (!REG_POINTER (operands[1]) && REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_INDEX_P (operands[1])
+   && REG_OK_FOR_BASE_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:DF (plus:DI (match_dup 1) (match_dup 2)))
 	(match_dup 3))
@@ -3951,9 +3949,9 @@
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
    && TARGET_64BIT
-   && REG_OK_FOR_BASE_P (operands[2])
-   && (TARGET_NO_SPACE_REGS
-       || (REG_POINTER (operands[1]) && !REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_BASE_P (operands[1])
+   && REG_OK_FOR_INDEX_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:DF (plus:DI (match_dup 2) (match_dup 1)))
 	(match_dup 3))
@@ -4181,9 +4179,9 @@
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
    && TARGET_64BIT
-   && REG_OK_FOR_BASE_P (operands[1])
-   && (TARGET_NO_SPACE_REGS
-       || (!REG_POINTER (operands[1]) && REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_INDEX_P (operands[1])
+   && REG_OK_FOR_BASE_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:DI (plus:DI (match_dup 1) (match_dup 2)))
 	(match_dup 3))
@@ -4199,9 +4197,9 @@
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
    && TARGET_64BIT
-   && REG_OK_FOR_BASE_P (operands[2])
-   && (TARGET_NO_SPACE_REGS
-       || (REG_POINTER (operands[1]) && !REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_BASE_P (operands[1])
+   && REG_OK_FOR_INDEX_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:DI (plus:DI (match_dup 2) (match_dup 1)))
 	(match_dup 3))
@@ -4413,9 +4411,9 @@
         (match_operand:SF 3 "register_operand" ""))]
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
-   && REG_OK_FOR_BASE_P (operands[1])
-   && (TARGET_NO_SPACE_REGS
-       || (!REG_POINTER (operands[1]) && REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_INDEX_P (operands[1])
+   && REG_OK_FOR_BASE_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:SF (plus:SI (match_dup 1) (match_dup 2)))
 	(match_dup 3))
@@ -4430,9 +4428,9 @@
         (match_operand:SF 3 "register_operand" ""))]
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
-   && REG_OK_FOR_BASE_P (operands[2])
-   && (TARGET_NO_SPACE_REGS
-       || (REG_POINTER (operands[1]) && !REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_BASE_P (operands[1])
+   && REG_OK_FOR_INDEX_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:SF (plus:SI (match_dup 2) (match_dup 1)))
 	(match_dup 3))
@@ -4448,9 +4446,9 @@
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
    && TARGET_64BIT
-   && REG_OK_FOR_BASE_P (operands[1])
-   && (TARGET_NO_SPACE_REGS
-       || (!REG_POINTER (operands[1]) && REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_INDEX_P (operands[1])
+   && REG_OK_FOR_BASE_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:SF (plus:DI (match_dup 1) (match_dup 2)))
 	(match_dup 3))
@@ -4466,9 +4464,9 @@
   "!TARGET_SOFT_FLOAT
    && !TARGET_DISABLE_INDEXING
    && TARGET_64BIT
-   && REG_OK_FOR_BASE_P (operands[2])
-   && (TARGET_NO_SPACE_REGS
-       || (REG_POINTER (operands[1]) && !REG_POINTER (operands[2])))
+   && TARGET_NO_SPACE_REGS
+   && REG_OK_FOR_BASE_P (operands[1])
+   && REG_OK_FOR_INDEX_P (operands[2])
    && FP_REGNO_P (REGNO (operands[3]))"
   [(set (mem:SF (plus:DI (match_dup 2) (match_dup 1)))
 	(match_dup 3))
@@ -5082,7 +5080,7 @@
 	      (clobber (reg:SI 26))
 	      (clobber (reg:SI 25))
 	      (clobber (match_dup 4))])
-   (set (match_operand:SI 0 "general_operand" "") (reg:SI 29))]
+   (set (match_operand:SI 0 "move_dest_operand" "") (reg:SI 29))]
   ""
   "
 {
@@ -5208,7 +5206,7 @@
 	      (clobber (reg:SI 26))
 	      (clobber (reg:SI 25))
 	      (clobber (match_dup 5))])
-   (set (match_operand:SI 0 "general_operand" "") (reg:SI 29))]
+   (set (match_operand:SI 0 "move_dest_operand" "") (reg:SI 29))]
   ""
   "
 {
@@ -5264,7 +5262,7 @@
 	      (clobber (reg:SI 26))
 	      (clobber (reg:SI 25))
 	      (clobber (match_dup 5))])
-   (set (match_operand:SI 0 "general_operand" "") (reg:SI 29))]
+   (set (match_operand:SI 0 "move_dest_operand" "") (reg:SI 29))]
   ""
   "
 {
@@ -5321,7 +5319,7 @@
 	      (clobber (reg:SI 26))
 	      (clobber (reg:SI 25))
 	      (clobber (match_dup 5))])
-   (set (match_operand:SI 0 "general_operand" "") (reg:SI 29))]
+   (set (match_operand:SI 0 "move_dest_operand" "") (reg:SI 29))]
   ""
   "
 {
@@ -5373,7 +5371,7 @@
 	      (clobber (reg:SI 26))
 	      (clobber (reg:SI 25))
 	      (clobber (match_dup 5))])
-   (set (match_operand:SI 0 "general_operand" "") (reg:SI 29))]
+   (set (match_operand:SI 0 "move_dest_operand" "") (reg:SI 29))]
   ""
   "
 {
@@ -5422,25 +5420,14 @@
 
 (define_expand "anddi3"
   [(set (match_operand:DI 0 "register_operand" "")
-	(and:DI (match_operand:DI 1 "and_operand" "")
+	(and:DI (match_operand:DI 1 "register_operand" "")
 		(match_operand:DI 2 "and_operand" "")))]
   ""
   "
 {
-  if (TARGET_64BIT)
-    {
-      /* One operand must be a register operand.  */
-      if (!register_operand (operands[1], DImode)
-	  && !register_operand (operands[2], DImode))
-	FAIL;
-    }
-  else
-    {
-      /* Both operands must be register operands.  */
-      if (!register_operand (operands[1], DImode)
-	  || !register_operand (operands[2], DImode))
-	FAIL;
-    }
+  /* Both operands must be register operands.  */
+  if (!TARGET_64BIT && !register_operand (operands[2], DImode))
+    FAIL;
 }")
 
 (define_insn ""
@@ -5501,25 +5488,14 @@
 
 (define_expand "iordi3"
   [(set (match_operand:DI 0 "register_operand" "")
-	(ior:DI (match_operand:DI 1 "ior_operand" "")
+	(ior:DI (match_operand:DI 1 "register_operand" "")
 		(match_operand:DI 2 "ior_operand" "")))]
   ""
   "
 {
-  if (TARGET_64BIT)
-    {
-      /* One operand must be a register operand.  */
-      if (!register_operand (operands[1], DImode)
-	  && !register_operand (operands[2], DImode))
-	FAIL;
-    }
-  else
-    {
-      /* Both operands must be register operands.  */
-      if (!register_operand (operands[1], DImode)
-	  || !register_operand (operands[2], DImode))
-	FAIL;
-    }
+  /* Both operands must be register operands.  */
+  if (!TARGET_64BIT && !register_operand (operands[2], DImode))
+    FAIL;
 }")
 
 (define_insn ""

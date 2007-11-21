@@ -164,10 +164,11 @@ static bool should_stack_file (cpp_reader *, _cpp_file *file, bool import);
 static struct cpp_dir *search_path_head (cpp_reader *, const char *fname,
 				 int angle_brackets, enum include_type);
 static const char *dir_name_of_file (_cpp_file *file);
-static void open_file_failed (cpp_reader *pfile, _cpp_file *file);
+static void open_file_failed (cpp_reader *pfile, _cpp_file *file, int);
 static struct file_hash_entry *search_cache (struct file_hash_entry *head,
 					     const cpp_dir *start_dir);
 static _cpp_file *make_cpp_file (cpp_reader *, cpp_dir *, const char *fname);
+static void destroy_cpp_file (_cpp_file *);
 static cpp_dir *make_cpp_dir (cpp_reader *, const char *dir_name, int sysp);
 static void allocate_file_hash_entries (cpp_reader *pfile);
 static struct file_hash_entry *new_file_hash_entry (cpp_reader *pfile);
@@ -329,7 +330,7 @@ find_file_in_dir (cpp_reader *pfile, _cpp_file *file, bool *invalid_pch)
 
   if (file->err_no != ENOENT)
     {
-      open_file_failed (pfile, file);
+      open_file_failed (pfile, file, 0);
       return true;
     }
 
@@ -359,7 +360,7 @@ _cpp_find_failed (_cpp_file *file)
    to open_file().
 */
 _cpp_file *
-_cpp_find_file (cpp_reader *pfile, const char *fname, cpp_dir *start_dir, bool fake)
+_cpp_find_file (cpp_reader *pfile, const char *fname, cpp_dir *start_dir, bool fake, int angle_brackets)
 {
   struct file_hash_entry *entry, **hash_slot;
   _cpp_file *file;
@@ -390,7 +391,7 @@ _cpp_find_file (cpp_reader *pfile, const char *fname, cpp_dir *start_dir, bool f
       file->dir = file->dir->next;
       if (file->dir == NULL)
 	{
-	  open_file_failed (pfile, file);
+	  open_file_failed (pfile, file, angle_brackets);
 	  if (invalid_pch)
 	    {
 	      cpp_error (pfile, CPP_DL_ERROR, 
@@ -532,7 +533,7 @@ read_file (cpp_reader *pfile, _cpp_file *file)
 
   if (file->fd == -1 && !open_file (file))
     {
-      open_file_failed (pfile, file);
+      open_file_failed (pfile, file, 0);
       return false;
     }
 
@@ -598,12 +599,38 @@ should_stack_file (cpp_reader *pfile, _cpp_file *file, bool import)
       if ((import || f->once_only)
 	  && f->err_no == 0
 	  && f->st.st_mtime == file->st.st_mtime
-	  && f->st.st_size == file->st.st_size
-	  && read_file (pfile, f)
-	  /* Size might have changed in read_file().  */
-	  && f->st.st_size == file->st.st_size
-	  && !memcmp (f->buffer, file->buffer, f->st.st_size))
-	break;
+	  && f->st.st_size == file->st.st_size)
+	{
+	  _cpp_file *ref_file;
+	  bool same_file_p = false;
+
+	  if (f->buffer && !f->buffer_valid)
+	    {
+	      /* We already have a buffer but it is not valid, because
+		 the file is still stacked.  Make a new one.  */
+	      ref_file = make_cpp_file (pfile, f->dir, f->name);
+	      ref_file->path = f->path;
+	    }
+	  else
+	    /* The file is not stacked anymore.  We can reuse it.  */
+	    ref_file = f;
+
+	  same_file_p = read_file (pfile, ref_file)
+			/* Size might have changed in read_file().  */
+			&& ref_file->st.st_size == file->st.st_size
+			&& !memcmp (ref_file->buffer,
+				    file->buffer,
+				    file->st.st_size);
+
+	  if (f->buffer && !f->buffer_valid)
+	    {
+	      ref_file->path = 0;
+	      destroy_cpp_file (ref_file);
+	    }
+
+	  if (same_file_p)
+	    break;
+	}
     }
 
   return f == NULL;
@@ -730,16 +757,17 @@ _cpp_stack_include (cpp_reader *pfile, const char *fname, int angle_brackets,
   if (!dir)
     return false;
 
-  return _cpp_stack_file (pfile, _cpp_find_file (pfile, fname, dir, false),
+  return _cpp_stack_file (pfile, _cpp_find_file (pfile, fname, dir, false,
+						 angle_brackets),
 		     type == IT_IMPORT);
 }
 
 /* Could not open FILE.  The complication is dependency output.  */
 static void
-open_file_failed (cpp_reader *pfile, _cpp_file *file)
+open_file_failed (cpp_reader *pfile, _cpp_file *file, int angle_brackets)
 {
   int sysp = pfile->map ? pfile->map->sysp: 0;
-  bool print_dep = CPP_OPTION (pfile, deps.style) > !!sysp;
+  bool print_dep = CPP_OPTION (pfile, deps.style) > (angle_brackets || !!sysp);
 
   errno = file->err_no;
   if (print_dep && CPP_OPTION (pfile, deps.missing_files) && errno == ENOENT)
@@ -781,6 +809,16 @@ make_cpp_file (cpp_reader *pfile, cpp_dir *dir, const char *fname)
   return file;
 }
 
+/* Release a _cpp_file structure.  */
+static void
+destroy_cpp_file (_cpp_file *file)
+{
+  if (file->buffer)
+    free ((void *) file->buffer);
+  free ((void *) file->name);
+  free (file);
+}
+
 /* A hash of directory names.  The directory names are the path names
    of files which contain a #include "", the included file name is
    appended to this directories.
@@ -795,7 +833,7 @@ make_cpp_dir (cpp_reader *pfile, const char *dir_name, int sysp)
   cpp_dir *dir;
 
   hash_slot = (struct file_hash_entry **)
-    htab_find_slot_with_hash (pfile->file_hash, dir_name,
+    htab_find_slot_with_hash (pfile->dir_hash, dir_name,
 			      htab_hash_string (dir_name),
 			      INSERT);
 
@@ -894,6 +932,8 @@ _cpp_init_files (cpp_reader *pfile)
 {
   pfile->file_hash = htab_create_alloc (127, file_hash_hash, file_hash_eq,
 					NULL, xcalloc, free);
+  pfile->dir_hash = htab_create_alloc (127, file_hash_hash, file_hash_eq,
+					NULL, xcalloc, free);
   allocate_file_hash_entries (pfile);
 }
 
@@ -902,13 +942,14 @@ void
 _cpp_cleanup_files (cpp_reader *pfile)
 {
   htab_delete (pfile->file_hash);
+  htab_delete (pfile->dir_hash);
 }
 
 /* Enter a file name in the hash for the sake of cpp_included.  */
 void
 _cpp_fake_include (cpp_reader *pfile, const char *fname)
 {
-  _cpp_find_file (pfile, fname, pfile->buffer->file->dir, true);
+  _cpp_find_file (pfile, fname, pfile->buffer->file->dir, true, 0);
 }
 
 /* Not everyone who wants to set system-header-ness on a buffer can
@@ -990,7 +1031,7 @@ _cpp_compare_file_date (cpp_reader *pfile, const char *fname,
   if (!dir)
     return -1;
 
-  file = _cpp_find_file (pfile, fname, dir, false);
+  file = _cpp_find_file (pfile, fname, dir, false, angle_brackets);
   if (file->err_no)
     return -1;
 
@@ -1030,6 +1071,7 @@ _cpp_pop_file_buffer (cpp_reader *pfile, _cpp_file *file)
     {
       free ((void *) file->buffer);
       file->buffer = NULL;
+      file->buffer_valid = false;
     }
 }
 
