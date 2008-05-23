@@ -101,7 +101,9 @@ using std::wmemcmp;
 using std::wmemcpy;
 using std::wmemmove;
 using std::wmemset;
+#if _GLIBCXX_HAVE_WCSFTIME
 using std::wcsftime;
+#endif
 
 #if _GLIBCXX_USE_C99
 using std::wcstold;

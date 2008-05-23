@@ -1044,6 +1044,9 @@ AC_DEFUN([GLIBCXX_ENABLE_CLOCALE], [
   # Default to "generic".
   if test $enable_clocale_flag = auto; then
     case x${target_os} in
+      x*-uclibc*)
+	enable_clocale_flag=uclibc
+	;;
       xlinux* | xgnu* | xkfreebsd*-gnu | xknetbsd*-gnu)
         AC_EGREP_CPP([_GLIBCXX_ok], [
         #include <features.h>
@@ -1169,6 +1172,41 @@ AC_DEFUN([GLIBCXX_ENABLE_CLOCALE], [
       CTIME_H=config/locale/generic/time_members.h
       CTIME_CC=config/locale/generic/time_members.cc
       CLOCALE_INTERNAL_H=config/locale/generic/c++locale_internal.h
+      ;;
+    uclibc)
+      AC_MSG_RESULT(uclibc)
+
+      # Declare intention to use gettext, and add support for specific
+      # languages.
+      # For some reason, ALL_LINGUAS has to be before AM-GNU-GETTEXT
+      ALL_LINGUAS="de fr"
+
+      # Don't call AM-GNU-GETTEXT here. Instead, assume glibc.
+      AC_CHECK_PROG(check_msgfmt, msgfmt, yes, no)
+      if test x"$check_msgfmt" = x"yes" && test x"$enable_nls" = x"yes"; then
+        USE_NLS=yes
+      fi
+      # Export the build objects.
+      for ling in $ALL_LINGUAS; do \
+        glibcxx_MOFILES="$glibcxx_MOFILES $ling.mo"; \
+        glibcxx_POFILES="$glibcxx_POFILES $ling.po"; \
+      done
+      AC_SUBST(glibcxx_MOFILES)
+      AC_SUBST(glibcxx_POFILES)
+
+      CLOCALE_H=config/locale/uclibc/c_locale.h
+      CLOCALE_CC=config/locale/uclibc/c_locale.cc
+      CCODECVT_H=config/locale/ieee_1003.1-2001/codecvt_specializations.h
+      CCODECVT_CC=config/locale/uclibc/codecvt_members.cc
+      CCOLLATE_CC=config/locale/uclibc/collate_members.cc
+      CCTYPE_CC=config/locale/uclibc/ctype_members.cc
+      CMESSAGES_H=config/locale/uclibc/messages_members.h
+      CMESSAGES_CC=config/locale/uclibc/messages_members.cc
+      CMONEY_CC=config/locale/uclibc/monetary_members.cc
+      CNUMERIC_CC=config/locale/uclibc/numeric_members.cc
+      CTIME_H=config/locale/uclibc/time_members.h
+      CTIME_CC=config/locale/uclibc/time_members.cc
+      CLOCALE_INTERNAL_H=config/locale/uclibc/c++locale_internal.h
       ;;
   esac
 

@@ -217,6 +217,12 @@ case "${host_os}" in
     ;;
 esac
 
+# Override for uClibc since linux-uclibc gets mishandled above.
+case "${host_os}" in
+  *-uclibc*)
+    os_include_dir="os/uclibc"
+    ;;
+esac
 
 # Set any OS-dependent and CPU-dependent bits.
 # THIS TABLE IS SORTED.  KEEP IT THAT WAY.
