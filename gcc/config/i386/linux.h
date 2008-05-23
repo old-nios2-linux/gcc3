@@ -110,22 +110,21 @@ Boston, MA 02111-1307, USA.  */
 
 #undef	LINK_SPEC
 #ifdef USE_GNULIBC_1
-#define LINK_SPEC "-m elf_i386 %{shared:-shared} \
-  %{!shared: \
-    %{!ibcs: \
-      %{!static: \
-	%{rdynamic:-export-dynamic} \
-	%{!dynamic-linker:-dynamic-linker /lib/ld-linux.so.1}} \
-	%{static:-static}}}"
+#define ELF_DYNAMIC_LINKER "/lib/ld-linux.so.1"
 #else
+#ifdef USE_UCLIBC
+#define ELF_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
+#else
+#define ELF_DYNAMIC_LINKER "/lib/ld-linux.so.2"
+#endif
+#endif
 #define LINK_SPEC "-m elf_i386 %{shared:-shared} \
   %{!shared: \
     %{!ibcs: \
       %{!static: \
 	%{rdynamic:-export-dynamic} \
-	%{!dynamic-linker:-dynamic-linker /lib/ld-linux.so.2}} \
+	%{!dynamic-linker:-dynamic-linker " ELF_DYNAMIC_LINKER "}} \
 	%{static:-static}}}"
-#endif
 
 /* A C statement (sans semicolon) to output to the stdio stream
    FILE the assembler definition of uninitialized global DECL named

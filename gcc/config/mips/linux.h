@@ -109,6 +109,11 @@ Boston, MA 02111-1307, USA.  */
 
 /* Borrowed from sparc/linux.h */
 #undef LINK_SPEC
+#ifdef USE_UCLIBC
+#define ELF_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
+#else
+#define ELF_DYNAMIC_LINKER "/lib/ld.so.1"
+#endif
 #define LINK_SPEC \
  "%(endian_spec) \
   %{shared:-shared} \
@@ -116,7 +121,7 @@ Boston, MA 02111-1307, USA.  */
     %{!ibcs: \
       %{!static: \
         %{rdynamic:-export-dynamic} \
-        %{!dynamic-linker:-dynamic-linker /lib/ld.so.1}} \
+        %{!dynamic-linker:-dynamic-linker " ELF_DYNAMIC_LINKER "}} \
         %{static:-static}}}"
 
 #undef SUBTARGET_ASM_SPEC

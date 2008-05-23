@@ -2333,6 +2333,12 @@ am33_2.0-*-linux*)
 	;;
 esac
 
+# Rather than hook into each target, just do it after all the linux
+# targets have been processed
+case ${target} in
+*-linux-uclibc*) tm_defines="${tm_defines} USE_UCLIBC" ; tmake_file="${tmake_file} t-linux-uclibc"
+esac
+
 # Support for --with-cpu and related options (and a few unrelated options,
 # too).
 case ${with_cpu} in

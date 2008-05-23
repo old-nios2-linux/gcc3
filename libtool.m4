@@ -689,6 +689,11 @@ linux-gnu*)
   lt_cv_file_magic_test_file=`echo /lib/libc.so* /lib/libc-*.so`
   ;;
 
+linux-uclibc*)
+  lt_cv_deplibs_check_method=pass_all
+  lt_cv_file_magic_test_file=`echo /lib/libuClibc-*.so`
+  ;;
+
 netbsd*)
   if echo __ELF__ | $CC -E - | grep __ELF__ > /dev/null; then
     [lt_cv_deplibs_check_method='match_pattern /lib[^/\.]+\.so\.[0-9]+\.[0-9]+$']

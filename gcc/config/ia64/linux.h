@@ -37,13 +37,18 @@ do {						\
 /* Define this for shared library support because it isn't in the main
    linux.h file.  */
 
+#ifdef USE_UCLIBC
+#define ELF_DYNAMIC_LINKER	"/lib/ld-uClibc.so.0"
+#else
+#define ELF_DYNAMIC_LINKER "/lib/ld-linux-ia64.so.2"
+#endif
 #undef LINK_SPEC
 #define LINK_SPEC "\
   %{shared:-shared} \
   %{!shared: \
     %{!static: \
       %{rdynamic:-export-dynamic} \
-      %{!dynamic-linker:-dynamic-linker /lib/ld-linux-ia64.so.2}} \
+      %{!dynamic-linker:-dynamic-linker " ELF_DYNAMIC_LINKER "}} \
       %{static:-static}}"
 
 

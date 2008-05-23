@@ -54,14 +54,21 @@ Boston, MA 02111-1307, USA.  */
    When the -shared link option is used a final link is not being
    done.  */
 
+#ifdef USE_UCLIBC
+#define ELF32_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
+#define ELF64_DYNAMIC_LINKER "/lib/ld64-uClibc.so.0"
+#else
+#define ELF32_DYNAMIC_LINKER "/lib/ld-linux.so.2"
+#define ELF64_DYNAMIC_LINKER "/lib64/ld-linux-x86-64.so.2"
+#endif
 #undef	LINK_SPEC
 #define LINK_SPEC "%{!m32:-m elf_x86_64} %{m32:-m elf_i386} \
   %{shared:-shared} \
   %{!shared: \
     %{!static: \
       %{rdynamic:-export-dynamic} \
-      %{m32:%{!dynamic-linker:-dynamic-linker /lib/ld-linux.so.2}} \
-      %{!m32:%{!dynamic-linker:-dynamic-linker /lib64/ld-linux-x86-64.so.2}}} \
+      %{m32:%{!dynamic-linker:-dynamic-linker " ELF32_DYNAMIC_LINKER "}} \
+      %{!m32:%{!dynamic-linker:-dynamic-linker " ELF64_DYNAMIC_LINKER "}}} \
     %{static:-static}}"
 
 #define MULTILIB_DEFAULTS { "m64" }

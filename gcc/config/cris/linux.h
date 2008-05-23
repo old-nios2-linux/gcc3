@@ -79,6 +79,25 @@ Boston, MA 02111-1307, USA.  */
 #undef CRIS_DEFAULT_CPU_VERSION
 #define CRIS_DEFAULT_CPU_VERSION CRIS_CPU_NG
 
+#ifdef USE_UCLIBC
+
+#undef CRIS_SUBTARGET_VERSION
+#define CRIS_SUBTARGET_VERSION " - cris-axis-linux-uclibc"
+
+#undef CRIS_LINK_SUBTARGET_SPEC
+#define CRIS_LINK_SUBTARGET_SPEC \
+ "-mcrislinux\
+  -rpath-link include/asm/../..%s\
+  %{shared} %{static}\
+  %{symbolic:-Bdynamic} %{shlib:-Bdynamic} %{static:-Bstatic}\
+  %{!shared: \
+    %{!static: \
+      %{rdynamic:-export-dynamic} \
+      %{!dynamic-linker:-dynamic-linker /lib/ld-uClibc.so.0}}} \
+  %{!r:%{O2|O3: --gc-sections}}"
+
+#else  /* USE_UCLIBC */
+
 #undef CRIS_SUBTARGET_VERSION
 #define CRIS_SUBTARGET_VERSION " - cris-axis-linux-gnu"
 
@@ -92,6 +111,8 @@ Boston, MA 02111-1307, USA.  */
   %{symbolic:-Bdynamic} %{shlib:-Bdynamic} %{static:-Bstatic}\
   %{!shared:%{!static:%{rdynamic:-export-dynamic}}}\
   %{!r:%{O2|O3: --gc-sections}}"
+
+#endif  /* USE_UCLIBC */
 
 
 /* Node: Run-time Target */

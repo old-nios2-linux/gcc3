@@ -949,6 +949,7 @@ extern int fixuplabelno;
   mcall-linux  : %(link_os_linux)       ; \
   mcall-gnu    : %(link_os_gnu)         ; \
   mcall-netbsd : %(link_os_netbsd)      ; \
+  mcall-linux-uclibc : %(link_os_linux_uclibc); \
   mcall-openbsd: %(link_os_openbsd)     ; \
                : %(link_os_default)     }"
 
@@ -1127,6 +1128,10 @@ extern int fixuplabelno;
   %{rdynamic:-export-dynamic} \
   %{!dynamic-linker:-dynamic-linker /lib/ld.so.1}}}"
 
+#define LINK_OS_LINUX_UCLIBC_SPEC "-m elf32ppclinux %{!shared: %{!static: \
+  %{rdynamic:-export-dynamic} \
+  %{!dynamic-linker:-dynamic-linker /lib/ld-uClibc.so.0}}}"
+
 #if defined(HAVE_LD_EH_FRAME_HDR)
 # define LINK_EH_SPEC "%{!static:--eh-frame-hdr} "
 #endif
@@ -1293,6 +1298,7 @@ ncrtn.o%s"
   { "link_os_sim",		LINK_OS_SIM_SPEC },			\
   { "link_os_freebsd",		LINK_OS_FREEBSD_SPEC },			\
   { "link_os_linux",		LINK_OS_LINUX_SPEC },			\
+  { "link_os_linux_uclibc",	LINK_OS_LINUX_UCLIBC_SPEC },		\
   { "link_os_gnu",		LINK_OS_GNU_SPEC },			\
   { "link_os_netbsd",		LINK_OS_NETBSD_SPEC },			\
   { "link_os_openbsd",		LINK_OS_OPENBSD_SPEC },			\

@@ -162,13 +162,18 @@ Boston, MA 02111-1307, USA.  */
         %{!dynamic-linker:-dynamic-linker /lib/ld-linux.so.1}} \
         %{static:-static}}}"
 #else
+#ifdef USE_UCLIBC
+#define ELF_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
+#else
+#define ELF_DYNAMIC_LINKER "/lib/ld-linux.so.2"
+#endif
 #define LINK_SPEC "-m elf32_sparc -Y P,/usr/lib %{shared:-shared} \
   %{!mno-relax:%{!r:-relax}} \
   %{!shared: \
     %{!ibcs: \
       %{!static: \
         %{rdynamic:-export-dynamic} \
-        %{!dynamic-linker:-dynamic-linker /lib/ld-linux.so.2}} \
+        %{!dynamic-linker:-dynamic-linker " ELF_DYNAMIC_LINKER "}} \
         %{static:-static}}}"
 #endif
 

@@ -131,12 +131,17 @@ Boston, MA 02111-1307, USA.  */
 
 /* If ELF is the default format, we should not use /lib/elf.  */
 
+#ifdef USE_UCLIBC
+#define ELF_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
+#else
+#define ELF_DYNAMIC_LINKER "/lib/ld.so.1"
+#endif
 #undef	LINK_SPEC
 #define LINK_SPEC "-m m68kelf %{shared} \
   %{!shared: \
     %{!static: \
       %{rdynamic:-export-dynamic} \
-      %{!dynamic-linker*:-dynamic-linker /lib/ld.so.1}} \
+      %{!dynamic-linker*:-dynamic-linker " ELF_DYNAMIC_LINKER "}} \
     %{static}}"
 
 /* For compatibility with linux/a.out */

@@ -69,7 +69,11 @@
 #define LINK_START_DEFAULT_SPEC "%(link_start_linux)"
 
 #undef	LINK_OS_DEFAULT_SPEC
+#ifdef USE_UCLIBC
+#define LINK_OS_DEFAULT_SPEC "%(link_os_linux_uclibc)"
+#else
 #define LINK_OS_DEFAULT_SPEC "%(link_os_linux)"
+#endif
 
 #define LINK_GCC_C_SEQUENCE_SPEC \
   "%{static:--start-group} %G %L %{static:--end-group}%{!static:%G}"

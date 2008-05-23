@@ -80,6 +80,11 @@
 #define ENDFILE_SPEC \
   "%{!shared:crtend.o%s} %{shared:crtendS.o%s} crtn.o%s"
 
+#ifdef USE_UCLIBC
+#define ELF_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
+#else
+#define ELF_DYNAMIC_LINKER "/lib/ld-linux.so.2"
+#endif
 #undef  LINK_SPEC
 #define LINK_SPEC "%{h*} %{version:-v} \
    %{b} %{Wl,*:%*} \
@@ -87,7 +92,7 @@
    %{shared:-shared} \
    %{symbolic:-Bsymbolic} \
    %{rdynamic:-export-dynamic} \
-   %{!dynamic-linker:-dynamic-linker /lib/ld-linux.so.2} \
+   %{!dynamic-linker:-dynamic-linker " ELF_DYNAMIC_LINKER "} \
    -X \
    %{mbig-endian:-EB}" \
    SUBTARGET_EXTRA_LINK_SPEC

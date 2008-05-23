@@ -77,6 +77,13 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #define MULTILIB_DEFAULTS { "m31" }
 #endif
 
+#ifdef USE_UCLIBC
+#define ELF31_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
+#define ELF64_DYNAMIC_LINKER "/lib/ld64-uClibc.so.0"
+#else
+#define ELF31_DYNAMIC_LINKER "/lib/ld.so.1"
+#define ELF64_DYNAMIC_LINKER "/lib/ld64.so.1"
+#endif
 #undef  LINK_SPEC
 #define LINK_SPEC \
   "%{m31:-m elf_s390}%{m64:-m elf64_s390} \
@@ -86,8 +93,8 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
       %{!static: \
 	%{rdynamic:-export-dynamic} \
 	%{!dynamic-linker: \
-          %{m31:-dynamic-linker /lib/ld.so.1} \
-          %{m64:-dynamic-linker /lib/ld64.so.1}}}}"
+          %{m31:-dynamic-linker " ELF31_DYNAMIC_LINKER "} \
+          %{m64:-dynamic-linker " ELF64_DYNAMIC_LINKER "}}}}"
 
 
 #define TARGET_ASM_FILE_END file_end_indicate_exec_stack

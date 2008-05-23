@@ -73,11 +73,16 @@ do { \
 #undef SUBTARGET_LINK_EMUL_SUFFIX
 #define SUBTARGET_LINK_EMUL_SUFFIX "_linux"
 #undef SUBTARGET_LINK_SPEC
+#ifdef USE_UCLIBC
+#define ELF_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
+#else
+#define ELF_DYNAMIC_LINKER "/lib/ld-linux.so.2"
+#endif
 #define SUBTARGET_LINK_SPEC \
   "%{shared:-shared} \
    %{!static: \
      %{rdynamic:-export-dynamic} \
-     %{!dynamic-linker:-dynamic-linker /lib/ld-linux.so.2}} \
+     %{!dynamic-linker:-dynamic-linker " ELF_DYNAMIC_LINKER "}} \
    %{static:-static}"
 
 #undef LIB_SPEC

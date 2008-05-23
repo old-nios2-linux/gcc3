@@ -77,13 +77,18 @@ Boston, MA 02111-1307, USA.  */
 /* Define this for shared library support because it isn't in the main
    linux.h file.  */
 
+#ifdef USE_UCLIBC
+#define ELF_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
+#else
+#define ELF_DYNAMIC_LINKER "/lib/ld.so.1"
+#endif
 #undef LINK_SPEC
 #define LINK_SPEC "\
   %{shared:-shared} \
   %{!shared: \
     %{!static: \
       %{rdynamic:-export-dynamic} \
-      %{!dynamic-linker:-dynamic-linker /lib/ld.so.1}} \
+      %{!dynamic-linker:-dynamic-linker " ELF_DYNAMIC_LINKER "}} \
       %{static:-static}}"
 
 /* glibc's profiling functions don't need gcc to allocate counters.  */

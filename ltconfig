@@ -602,6 +602,7 @@ host_os=`echo $host | sed 's/^\([^-]*\)-\([^-]*\)-\(.*\)$/\3/'`
 
 # Transform linux* to *-*-linux-gnu*, to support old configure scripts.
 case $host_os in
+linux-uclibc*) ;;
 linux-gnu*) ;;
 linux*) host=`echo $host | sed 's/^\(.*-.*-linux\)\(.*\)$/\1-gnu\2/'`
 esac
@@ -1260,6 +1261,24 @@ linux-gnu*)
   # people can always --disable-shared, the test was removed, and we
   # assume the GNU/Linux dynamic linker is in use.
   dynamic_linker='GNU/Linux ld.so'
+  ;;
+
+linux-uclibc*)
+  version_type=linux
+  need_lib_prefix=no
+  need_version=no
+  library_names_spec='${libname}${release}.so$versuffix ${libname}${release}.so$major $libname.so'
+  soname_spec='${libname}${release}.so$major'
+  finish_cmds='PATH="\$PATH:/sbin" ldconfig -n $libdir'
+  shlibpath_var=LD_LIBRARY_PATH
+  shlibpath_overrides_runpath=no
+  # This implies no fast_install, which is unacceptable.
+  # Some rework will be needed to allow for fast_install
+  # before this can be enabled.
+  # Note: copied from linux-gnu, and may not be appropriate.
+  hardcode_into_libs=yes
+  # Assume using the uClibc dynamic linker.
+  dynamic_linker="uClibc ld.so"
   ;;
 
 netbsd*)
