@@ -1639,6 +1639,7 @@ extern rtx simplify_gen_subreg (enum machine_mode, rtx, enum machine_mode,
 extern rtx simplify_replace_rtx (rtx, rtx, rtx);
 extern rtx simplify_rtx (rtx);
 extern rtx avoid_constant_pool_reference (rtx);
+extern bool constant_pool_reference_p (rtx);
 
 /* In function.c  */
 extern rtx gen_mem_addressof (rtx, tree, int);
@@ -2199,6 +2200,8 @@ extern void regclass (rtx, int, FILE *);
 extern void reg_scan (rtx, unsigned int, int);
 extern void reg_scan_update (rtx, rtx, unsigned int);
 extern void fix_register (const char *, int, int);
+extern void init_subregs_of_mode (void);
+extern void record_subregs_of_mode (rtx);
 #ifdef HARD_CONST
 extern void cannot_change_mode_set_regs (HARD_REG_SET *,
 					 enum machine_mode, unsigned int);
@@ -2334,6 +2337,6 @@ extern void if_convert (int);
 extern void invert_br_probabilities (rtx);
 extern bool expensive_function_p (int);
 /* In tracer.c */
-extern void tracer (void);
+extern void tracer (unsigned int);
 
 #endif /* ! GCC_RTL_H */

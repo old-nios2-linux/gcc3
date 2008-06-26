@@ -266,7 +266,8 @@
 
 ;; Describe a user's asm statement.
 (define_asm_attributes
-  [(set_attr "type" "multi")])
+  [(set_attr "type" "multi")
+   (set_attr "can_delay" "no")])
 
 ;; .........................
 ;;
@@ -4072,8 +4073,7 @@ dsrl\t%3,%3,1\n\
   "!TARGET_MIPS16"
   "lwl\t%0,%2"
   [(set_attr "type" "load")
-   (set_attr "mode" "SI")
-   (set_attr "hazard" "none")])
+   (set_attr "mode" "SI")])
 
 (define_insn "mov_lwr"
   [(set (match_operand:SI 0 "register_operand" "=d")
@@ -5160,16 +5160,21 @@ dsrl\t%3,%3,1\n\
    (set_attr "mode"	"none")
    (set_attr "length"	"0")])
 
-;; Emit a .cprestore directive, which expands to a single store instruction.
-;; Note that we continue to use .cprestore for explicit reloc code so that
-;; jals inside inlines asms will work correctly.
+;; Emit a .cprestore directive, which normally expands to a single store
+;; instruction.  Note that we continue to use .cprestore for explicit reloc
+;; code so that jals inside inline asms will work correctly.
 (define_insn "cprestore"
-  [(unspec_volatile [(match_operand 0 "const_int_operand" "")]
+  [(unspec_volatile [(match_operand 0 "const_int_operand" "I,i")]
 		    UNSPEC_CPRESTORE)]
   ""
-  ".cprestore\t%0"
+{
+  if (set_nomacro && which_alternative == 1)
+    return ".set\tmacro\;.cprestore\t%0\;.set\tnomacro";
+  else
+    return ".cprestore\t%0";
+}
   [(set_attr "type" "store")
-   (set_attr "length" "4")])
+   (set_attr "length" "4,12")])
 
 ;; Block moves, see mips.c for more details.
 ;; Argument 0 is the destination
@@ -7765,6 +7770,24 @@ srl\t%M0,%M1,%2\n\
   [(set_attr "type" "fcmp")
    (set_attr "mode" "FPSW")])
 
+(define_insn "sungt_df"
+  [(set (match_operand:CC 0 "register_operand" "=z")
+	(ungt:CC (match_operand:DF 1 "register_operand" "f")
+	         (match_operand:DF 2 "register_operand" "f")))]
+  "TARGET_HARD_FLOAT && TARGET_DOUBLE_FLOAT"
+  "c.ult.d\t%Z0%2,%1"
+  [(set_attr "type" "fcmp")
+   (set_attr "mode" "FPSW")])
+
+(define_insn "sunge_df"
+  [(set (match_operand:CC 0 "register_operand" "=z")
+	(unge:CC (match_operand:DF 1 "register_operand" "f")
+	         (match_operand:DF 2 "register_operand" "f")))]
+  "TARGET_HARD_FLOAT && TARGET_DOUBLE_FLOAT"
+  "c.ule.d\t%Z0%2,%1"
+  [(set_attr "type" "fcmp")
+   (set_attr "mode" "FPSW")])
+
 (define_insn "seq_df"
   [(set (match_operand:CC 0 "register_operand" "=z")
 	(eq:CC (match_operand:DF 1 "register_operand" "f")
@@ -7843,6 +7866,24 @@ srl\t%M0,%M1,%2\n\
 		 (match_operand:SF 2 "register_operand" "f")))]
   "TARGET_HARD_FLOAT"
   "c.ule.s\t%Z0%1,%2"
+  [(set_attr "type" "fcmp")
+   (set_attr "mode" "FPSW")])
+
+(define_insn "sungt_sf"
+  [(set (match_operand:CC 0 "register_operand" "=z")
+	(ungt:CC (match_operand:SF 1 "register_operand" "f")
+	         (match_operand:SF 2 "register_operand" "f")))]
+  "TARGET_HARD_FLOAT"
+  "c.ult.s\t%Z0%2,%1"
+  [(set_attr "type" "fcmp")
+   (set_attr "mode" "FPSW")])
+
+(define_insn "sunge_sf"
+  [(set (match_operand:CC 0 "register_operand" "=z")
+	(unge:CC (match_operand:SF 1 "register_operand" "f")
+	         (match_operand:SF 2 "register_operand" "f")))]
+  "TARGET_HARD_FLOAT"
+  "c.ule.s\t%Z0%2,%1"
   [(set_attr "type" "fcmp")
    (set_attr "mode" "FPSW")])
 
@@ -8331,17 +8372,19 @@ ld\\t%2,%1-%S1(%2)\;daddu\\t%2,%2,$31\\n\\t%*j\\t%2%/"
   DONE;
 })
 
-(define_insn "exception_receiver"
+(define_insn_and_split "exception_receiver"
   [(set (reg:SI 28)
 	(unspec_volatile:SI [(const_int 0)] UNSPEC_EH_RECEIVER))]
   "TARGET_ABICALLS && (mips_abi == ABI_32 || mips_abi == ABI_O64)"
+  "#"
+  "&& reload_completed"
+  [(const_int 0)]
 {
-  operands[0] = pic_offset_table_rtx;
-  operands[1] = mips_gp_save_slot ();
-  return mips_output_move (operands[0], operands[1]);
+  mips_restore_gp ();
+  DONE;
 }
   [(set_attr "type"   "load")
-   (set_attr "length" "8")])
+   (set_attr "length" "12")])
 
 ;;
 ;;  ....................
@@ -8512,7 +8555,7 @@ ld\\t%2,%1-%S1(%2)\;daddu\\t%2,%2,$31\\n\\t%*j\\t%2%/"
 {
   emit_call_insn (gen_call_split (operands[0], operands[1]));
   if (!find_reg_note (operands[2], REG_NORETURN, 0))
-    emit_move_insn (pic_offset_table_rtx, mips_gp_save_slot ());
+    mips_restore_gp ();
   DONE;
 }
   [(set_attr "jal" "indirect,direct")
@@ -8553,7 +8596,7 @@ ld\\t%2,%1-%S1(%2)\;daddu\\t%2,%2,$31\\n\\t%*j\\t%2%/"
   emit_call_insn (gen_call_value_split (operands[0], operands[1],
 					operands[2]));
   if (!find_reg_note (operands[3], REG_NORETURN, 0))
-    emit_move_insn (pic_offset_table_rtx, mips_gp_save_slot ());
+    mips_restore_gp ();
   DONE;
 }
   [(set_attr "jal" "indirect,direct")
@@ -8586,7 +8629,7 @@ ld\\t%2,%1-%S1(%2)\;daddu\\t%2,%2,$31\\n\\t%*j\\t%2%/"
   emit_call_insn (gen_call_value_multiple_split (operands[0], operands[1],
 						 operands[2], operands[3]));
   if (!find_reg_note (operands[4], REG_NORETURN, 0))
-    emit_move_insn (pic_offset_table_rtx, mips_gp_save_slot ());
+    mips_restore_gp ();
   DONE;
 }
   [(set_attr "jal" "indirect,direct")

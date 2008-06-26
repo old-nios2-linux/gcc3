@@ -429,7 +429,7 @@ reg_to_stack (rtx first, FILE *file)
      Also need to rebuild life when superblock scheduling is done
      as it don't update liveness yet.  */
   if (!optimize
-      || (flag_sched2_use_superblocks
+      || ((flag_sched2_use_superblocks || flag_sched2_use_traces)
 	  && flag_schedule_insns_after_reload))
     {
       count_or_remove_death_notes (NULL, 1);
@@ -1060,9 +1060,20 @@ move_for_stack_reg (rtx insn, stack regstack, rtx pat)
 	    if (regstack->reg[i] == REGNO (src))
 	      break;
 
-	  /* The source must be live, and the dest must be dead.  */
-	  if (i < 0 || get_hard_regnum (regstack, dest) >= FIRST_STACK_REG)
+	  /* The destination must be dead, or life analysis is borked.  */
+	  if (get_hard_regnum (regstack, dest) >= FIRST_STACK_REG)
 	    abort ();
+
+	  /* If the source is not live, this is yet another case of
+	     uninitialized variables.  Load up a NaN instead.  */
+	  if (i < 0)
+	    {
+	      PATTERN (insn) = pat
+	        = gen_rtx_SET (VOIDmode,
+			       FP_MODE_REG (REGNO (dest), SFmode), nan);
+	      INSN_CODE (insn) = -1;
+	      return move_for_stack_reg (insn, regstack, pat);
+	    }
 
 	  /* It is possible that the dest is unused after this insn.
 	     If so, just pop the src.  */
@@ -1220,9 +1231,9 @@ swap_rtx_condition (rtx insn)
       pat = PATTERN (insn);
     }
 
-  /* See if this is, or ends in, a fnstsw, aka unspec 9.  If so, we're
-     not doing anything with the cc value right now.  We may be able to
-     search for one though.  */
+  /* See if this is, or ends in, a fnstsw.  If so, we're not doing anything
+     with the cc value right now.  We may be able to search for one
+     though.  */
 
   if (GET_CODE (pat) == SET
       && GET_CODE (SET_SRC (pat)) == UNSPEC
@@ -1241,9 +1252,13 @@ swap_rtx_condition (rtx insn)
 	    return 0;
 	}
 
+      /* We haven't found it.  */
+      if (insn == BB_END (current_block))
+	return 0;
+
       /* So we've found the insn using this value.  If it is anything
-	 other than sahf, aka unspec 10, or the value does not die
-	 (meaning we'd have to search further), then we must give up.  */
+	 other than sahf or the value does not die (meaning we'd have
+	 to search further), then we must give up.  */
       pat = PATTERN (insn);
       if (GET_CODE (pat) != SET
 	  || GET_CODE (SET_SRC (pat)) != UNSPEC

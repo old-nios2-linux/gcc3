@@ -1,6 +1,7 @@
 /* Definitions of target machine for Altera NIOS 2G NIOS2 version.
-   Copyright (C) 2005 Altera 
-   Contributed by Jonah Graham (jgraham@altera.com) and Will Reece (wreece@altera.com).
+   Copyright (C) 2007 Altera
+   Contributed by Jonah Graham (jgraham@altera.com), Will Reece (wreece@altera.com),
+   and Jeff DaSilva (jdasilva@altera.com).
 
 This file is part of GNU CC.
 
@@ -273,7 +274,7 @@ extern const char *nios2_custom_fpu_cfg_string;
 #define OVERRIDE_OPTIONS override_options ()
 #define OPTIMIZATION_OPTIONS(LEVEL, SIZE) optimization_options (LEVEL, SIZE)
 #define CAN_DEBUG_WITHOUT_FP
- 
+
 #define CC1_SPEC "\
 %{G*} %{EB:-meb} %{EL:-mel} %{EB:%{EL:%emay not use both -EB and -EL}}"
 
@@ -301,14 +302,14 @@ extern const char *nios2_custom_fpu_cfg_string;
 "
 
 
-#undef STARTFILE_SPEC 
+#undef STARTFILE_SPEC
 #define STARTFILE_SPEC  \
 "%{msys-crt0=*: %*} %{!msys-crt0=*: crt0%O%s} \
  %{msys-crt0=: %eYou need a C startup file for -msys-crt0=} \
  %{mctors-in-init: crti%O%s crtbegin%O%s} \
 "
 
-#undef ENDFILE_SPEC 
+#undef ENDFILE_SPEC
 #define ENDFILE_SPEC \
  "%{mctors-in-init: crtend%O%s crtn%O%s}"
 
@@ -394,8 +395,8 @@ Register Number
 8-15  r8-r15    Caller Saved Registers
 16-22 r16-r22   Callee Saved Registers
 23    r23 sc    Static Chain (Callee Saved)
-                ??? Does $sc want to be caller or callee 
-                saved. If caller, 15, else 23. 
+                ??? Does $sc want to be caller or callee
+                saved. If caller, 15, else 23.
 24    r24 et    Exception Temporary
 25    r25 bt    Breakpoint Temporary
 26    r26 gp    Global Pointer
@@ -406,12 +407,12 @@ Register Number
 31    r31 ra    Return Address
 
 32    ctl0 status
-33    ctl1 estatus STATUS saved by exception ?  
-34    ctl2 bstatus STATUS saved by break ?      
-35    ctl3 ipri    Interrupt Priority Mask ?    
-36    ctl4 ecause  Exception Cause ?    
+33    ctl1 estatus STATUS saved by exception ?
+34    ctl2 bstatus STATUS saved by break ?
+35    ctl3 ipri    Interrupt Priority Mask ?
+36    ctl4 ecause  Exception Cause ?
 
-37    pc       Not an actual register   
+37    pc       Not an actual register
 
 38    rap      Return address pointer, this does not
                    actually exist and will be eliminated
@@ -589,7 +590,7 @@ enum reg_class
 /* GP_REGS  */        {~0, 0},    \
 /* ALL_REGS */        {~0,~0}}    \
 
-#define REGNO_REG_CLASS(REGNO) ((REGNO) <= 31 ? GP_REGS : ALL_REGS) 
+#define REGNO_REG_CLASS(REGNO) ((REGNO) <= 31 ? GP_REGS : ALL_REGS)
 
 #define BASE_REG_CLASS ALL_REGS
 #define INDEX_REG_CLASS ALL_REGS
@@ -597,7 +598,7 @@ enum reg_class
 /* 'r', is handled automatically */
 #define  REG_CLASS_FROM_CONSTRAINT(CHAR, STR) \
   reg_class_from_constraint ((CHAR), (STR))
-  
+
 
 #define REGNO_OK_FOR_BASE_P2(REGNO, STRICT) \
     ((STRICT) \
@@ -654,8 +655,8 @@ enum reg_class
 #define CONSTRAINT_LEN(C, STR) \
  ((C) == 'D' ? 3 : DEFAULT_CONSTRAINT_LEN ((C), (STR)))
 
-/* 'S' matches immediates which are in small data 
-   and therefore can be added to gp to create a 
+/* 'S' matches immediates which are in small data
+   and therefore can be added to gp to create a
    32-bit value. */
 #define EXTRA_CONSTRAINT(VALUE, C)              \
   ((C) == 'S'                                   \
@@ -713,7 +714,7 @@ enum reg_class
 #define DWARF_FRAME_RETURN_COLUMN RA_REGNO
 
 /* Base register for access to local variables of the function.  We
-   pretend that the frame pointer is a non-existent hard register, and 
+   pretend that the frame pointer is a non-existent hard register, and
    then eliminate it to HARD_FRAME_POINTER_REGNUM. */
 #define FRAME_POINTER_REGNUM FAKE_FP_REGNO
 

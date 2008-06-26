@@ -5,7 +5,8 @@
    please modify this string to indicate that, e.g. by putting your
    organization's name in parentheses at the end of the string.  */
 
-const char version_string[] = "3.4.1 (Altera Nios II 7.2 b152)";
+// JDS
+const char version_string[] = "3.4.6 (Altera Nios II 8.0 b214)";
 
 /* This is the location of the online document giving instructions for
    reporting bugs.  If you distribute a modified version of GCC,
@@ -14,4 +15,5 @@ const char version_string[] = "3.4.1 (Altera Nios II 7.2 b152)";
    forward us bugs reported to you, if you determine that they are
    not bugs in your modifications.)  */
 
+// JDS
 const char bug_report_url[] = "<URL:http://www.altera.com/mysupport>";

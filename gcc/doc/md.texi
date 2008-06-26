@@ -1256,8 +1256,10 @@ instruction is defined:
   @dots{})
 @end smallexample
 @end ifset
-GCC can only handle one commutative pair in an asm; if you use more, 
-the compiler may fail.
+GCC can only handle one commutative pair in an asm; if you use more,
+the compiler may fail.  Note that you need not use the modifier if
+the two alternatives are strictly identical; this would only waste
+time in the reload pass.
 
 @cindex @samp{#} in constraint
 @item #
@@ -1314,15 +1316,15 @@ The constraints are defined through these macros:
 
 @table @code
 @item REG_CLASS_FROM_LETTER
-Register class constraints (usually lower case).
+Register class constraints (usually lowercase).
 
 @item CONST_OK_FOR_LETTER_P
 Immediate constant constraints, for non-floating point constants of
-word size or smaller precision (usually upper case).
+word size or smaller precision (usually uppercase).
 
 @item CONST_DOUBLE_OK_FOR_LETTER_P
 Immediate constant constraints, for all floating point constants and for
-constants of greater than word size precision (usually upper case).
+constants of greater than word size precision (usually uppercase).
 
 @item EXTRA_CONSTRAINT
 Special cases of registers or memory.  This macro is not required, and
@@ -1335,6 +1337,7 @@ However, here is a summary of the machine-dependent constraints
 available on some particular machines.
 
 @table @emph
+
 
 @item Altera Nios II family---@file{nios2.h}
 @table @code
@@ -2412,7 +2415,7 @@ pattern to accomplish a certain task.
 @table @asis
 @cindex @code{mov@var{m}} instruction pattern
 @item @samp{mov@var{m}}
-Here @var{m} stands for a two-letter machine mode name, in lower case.
+Here @var{m} stands for a two-letter machine mode name, in lowercase.
 This instruction pattern moves data with that machine mode from operand
 1 to operand 0.  For example, @samp{movsi} moves full-word data.
 
@@ -3937,7 +3940,7 @@ first operand.
 @item
 In combinations of @code{neg}, @code{mult}, @code{plus}, and
 @code{minus}, the @code{neg} operations (if any) will be moved inside
-the operations as far as possible.  For instance, 
+the operations as far as possible.  For instance,
 @code{(neg (mult A B))} is canonicalized as @code{(mult (neg A) B)}, but
 @code{(plus (mult (neg A) B) C)} is canonicalized as
 @code{(minus A (mult B C))}.
@@ -4932,9 +4935,9 @@ specified for an attribute, the following are defined:
 A @samp{#define} is written for the symbol @samp{HAVE_ATTR_@var{name}}.
 
 @item
-An enumeral class is defined for @samp{attr_@var{name}} with
+An enumerated class is defined for @samp{attr_@var{name}} with
 elements of the form @samp{@var{upper-name}_@var{upper-value}} where
-the attribute name and value are first converted to upper case.
+the attribute name and value are first converted to uppercase.
 
 @item
 A function @samp{get_attr_@var{name}} is defined that is passed an insn and
@@ -5578,13 +5581,13 @@ processors.
 The task of exploiting more processor parallelism is solved by an
 instruction scheduler.  For a better solution to this problem, the
 instruction scheduler has to have an adequate description of the
-processor parallelism (or @dfn{pipeline description}).  Currently GCC 
+processor parallelism (or @dfn{pipeline description}).  Currently GCC
 provides two alternative ways to describe processor parallelism,
 both described below.  The first method is outlined in the next section;
 it was once the only method provided by GCC, and thus is used in a number
 of exiting ports.  The second, and preferred method, specifies functional
 unit reservations for groups of instructions with the aid of @dfn{regular
-expressions}.  This is called the @dfn{automaton based description}.	
+expressions}.  This is called the @dfn{automaton based description}.
 
 The GCC instruction scheduler uses a @dfn{pipeline hazard recognizer} to
 figure out the possibility of the instruction issue by the processor
@@ -5733,13 +5736,14 @@ single or double precision, but not both, the following could be specified:
 
 @strong{Note:} The scheduler attempts to avoid function unit conflicts
 and uses all the specifications in the @code{define_function_unit}
-expression.  It has recently come to our attention that these
+expression.  It has recently been discovered that these
 specifications may not allow modeling of some of the newer
 ``superscalar'' processors that have insns using multiple pipelined
 units.  These insns will cause a potential conflict for the second unit
 used during their execution and there is no way of representing that
-conflict.  We welcome any examples of how function unit conflicts work
-in such processors and suggestions for their representation.
+conflict.  Any examples of how function unit conflicts work
+in such processors and suggestions for their representation would be
+welcomed.
 
 @end ifset
 @ifset INTERNALS
@@ -5757,7 +5761,7 @@ The following optional construction describes names of automata
 generated and used for the pipeline hazards recognition.  Sometimes
 the generated finite state automaton used by the pipeline hazard
 recognizer is large.  If we use more than one automaton and bind functional
-units to the automata, the total size of the automata is usually 
+units to the automata, the total size of the automata is usually
 less than the size of the single automaton.  If there is no one such
 construction, only one finite state automaton is generated.
 
@@ -5871,7 +5875,7 @@ expression according to the following syntax:
 
        allof = allof "+" repeat
              | repeat
- 
+
        repeat = element "*" number
               | element
 
@@ -6180,7 +6184,7 @@ construction
 The old instruction level parallelism description and the pipeline
 hazards recognizer based on it have the following drawbacks in
 comparison with the @acronym{DFA}-based ones:
-  
+
 @itemize @bullet
 @item
 Each functional unit is believed to be reserved at the instruction

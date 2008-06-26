@@ -148,6 +148,7 @@ static void output_deferred_plabels (void);
 #ifdef HPUX_LONG_DOUBLE_LIBRARY
 static void pa_hpux_init_libfuncs (void);
 #endif
+static struct machine_function * pa_init_machine_status (void);
 
 /* Save the operands last given to a compare for use when we
    generate a scc or bcc insn.  */
@@ -370,6 +371,8 @@ override_options (void)
       targetm.asm_out.unaligned_op.si = NULL;
       targetm.asm_out.unaligned_op.di = NULL;
     }
+
+  init_machine_status = pa_init_machine_status;
 }
 
 static void
@@ -379,6 +382,16 @@ pa_init_builtins (void)
   built_in_decls[(int) BUILT_IN_FPUTC_UNLOCKED] = NULL_TREE;
   implicit_built_in_decls[(int) BUILT_IN_FPUTC_UNLOCKED] = NULL_TREE;
 #endif
+}
+
+/* Function to init struct machine_function.
+   This will be called, via a pointer variable,
+   from push_function_context.  */
+
+static struct machine_function *
+pa_init_machine_status (void)
+{
+  return ggc_alloc_cleared (sizeof (machine_function));
 }
 
 /* If FROM is a probable pointer register, mark TO as a probable
@@ -4098,6 +4111,14 @@ pa_output_function_epilogue (FILE *file, HOST_WIDE_INT size ATTRIBUTE_UNUSED)
 
   fputs ("\t.EXIT\n\t.PROCEND\n", file);
 
+  if (TARGET_SOM && TARGET_GAS)
+    {
+      /* We done with this subspace except possibly for some additional
+	 debug information.  Forget that we are in this subspace to ensure
+	 that the next function is output in its own subspace.  */
+      forget_section ();
+    }
+
   if (INSN_ADDRESSES_SET_P ())
     {
       insn = get_last_nonnote_insn ();
@@ -7512,7 +7533,8 @@ attr_length_indirect_call (rtx insn)
 
   if (TARGET_FAST_INDIRECT_CALLS
       || (!TARGET_PORTABLE_RUNTIME
-	  && ((TARGET_PA_20 && distance < 7600000) || distance < 240000)))
+	  && ((TARGET_PA_20 && !TARGET_SOM && distance < 7600000)
+	      || distance < 240000)))
     return 8;
 
   if (flag_pic)
@@ -7548,7 +7570,15 @@ output_indirect_call (rtx insn, rtx call_dest)
      No need to check target flags as the length uniquely identifies
      the remaining cases.  */
   if (attr_length_indirect_call (insn) == 8)
-    return ".CALL\tARGW0=GR\n\t{bl|b,l} $$dyncall,%%r31\n\tcopy %%r31,%%r2";
+    {
+      /* The HP linker sometimes substitutes a BLE for BL/B,L calls to
+	 $$dyncall.  Since BLE uses %r31 as the link register, the 22-bit
+	 variant of the B,L instruction can't be used on the SOM target.  */
+      if (TARGET_PA_20 && !TARGET_SOM)
+	return ".CALL\tARGW0=GR\n\tb,l $$dyncall,%%r2\n\tcopy %%r2,%%r31";
+      else
+	return ".CALL\tARGW0=GR\n\tbl $$dyncall,%%r31\n\tcopy %%r31,%%r2";
+    }
 
   /* Long millicode call, but we are not generating PIC or portable runtime
      code.  */
@@ -7889,8 +7919,9 @@ pa_asm_output_mi_thunk (FILE *file, tree thunk_fndecl, HOST_WIDE_INT delta,
       fprintf (file, "\t.align 4\n");
       ASM_OUTPUT_LABEL (file, label);
       fprintf (file, "\t.word P'%s\n", fname);
-      function_section (thunk_fndecl);
     }
+  else if (TARGET_SOM && TARGET_GAS)
+    forget_section ();
 
   current_thunk_number++;
   nbytes = ((nbytes + FUNCTION_BOUNDARY / BITS_PER_UNIT - 1)
@@ -7925,6 +7956,9 @@ pa_asm_output_mi_thunk (FILE *file, tree thunk_fndecl, HOST_WIDE_INT delta,
 static bool
 pa_function_ok_for_sibcall (tree decl, tree exp ATTRIBUTE_UNUSED)
 {
+  if (TARGET_PORTABLE_RUNTIME)
+    return false;
+
   /* Sibcalls are ok for TARGET_ELF32 as along as the linker is used in
      single subspace mode and the call is not indirect.  As far as I know,
      there is no operating system support for the multiple subspace mode.
@@ -7942,9 +7976,8 @@ pa_function_ok_for_sibcall (tree decl, tree exp ATTRIBUTE_UNUSED)
   if (TARGET_64BIT)
     return false;
 
-  return (decl
-	  && !TARGET_PORTABLE_RUNTIME
-	  && !TREE_PUBLIC (decl));
+  /* Sibcalls are only ok within a translation unit.  */
+  return (decl && !TREE_PUBLIC (decl));
 }
 
 /* Returns 1 if the 6 operands specified in OPERANDS are suitable for
@@ -8768,24 +8801,40 @@ function_value (tree valtype, tree func ATTRIBUTE_UNUSED)
 {
   enum machine_mode valmode;
 
-  /* Aggregates with a size less than or equal to 128 bits are returned
-     in GR 28(-29).  They are left justified.  The pad bits are undefined.
-     Larger aggregates are returned in memory.  */
-  if (TARGET_64BIT && AGGREGATE_TYPE_P (valtype))
+  if (AGGREGATE_TYPE_P (valtype))
     {
-      rtx loc[2];
-      int i, offset = 0;
-      int ub = int_size_in_bytes (valtype) <= UNITS_PER_WORD ? 1 : 2;
-
-      for (i = 0; i < ub; i++)
+      if (TARGET_64BIT)
 	{
-	  loc[i] = gen_rtx_EXPR_LIST (VOIDmode,
-				      gen_rtx_REG (DImode, 28 + i),
-				      GEN_INT (offset));
-	  offset += 8;
-	}
+          /* Aggregates with a size less than or equal to 128 bits are
+	     returned in GR 28(-29).  They are left justified.  The pad
+	     bits are undefined.  Larger aggregates are returned in
+	     memory.  */
+	  rtx loc[2];
+	  int i, offset = 0;
+	  int ub = int_size_in_bytes (valtype) <= UNITS_PER_WORD ? 1 : 2;
 
-      return gen_rtx_PARALLEL (BLKmode, gen_rtvec_v (ub, loc));
+	  for (i = 0; i < ub; i++)
+	    {
+	      loc[i] = gen_rtx_EXPR_LIST (VOIDmode,
+					  gen_rtx_REG (DImode, 28 + i),
+					  GEN_INT (offset));
+	      offset += 8;
+	    }
+
+	  return gen_rtx_PARALLEL (BLKmode, gen_rtvec_v (ub, loc));
+	}
+      else if (int_size_in_bytes (valtype) > UNITS_PER_WORD)
+	{
+	  /* Aggregates 5 to 8 bytes in size are returned in general
+	     registers r28-r29 in the same manner as other non
+	     floating-point objects.  The data is right-justified and
+	     zero-extended to 64 bits.  This is opposite to the normal
+	     justification used on big endian targets and requires
+	     special treatment.  */
+	  rtx loc = gen_rtx_EXPR_LIST (VOIDmode,
+				       gen_rtx_REG (DImode, 28), const0_rtx);
+	  return gen_rtx_PARALLEL (BLKmode, gen_rtvec (1, loc));
+	}
     }
 
   if ((INTEGRAL_TYPE_P (valtype)
@@ -8796,6 +8845,7 @@ function_value (tree valtype, tree func ATTRIBUTE_UNUSED)
     valmode = TYPE_MODE (valtype);
 
   if (TREE_CODE (valtype) == REAL_TYPE
+      && !AGGREGATE_TYPE_P (valtype)
       && TYPE_MODE (valtype) != TFmode
       && !TARGET_SOFT_FLOAT)
     return gen_rtx_REG (valmode, 32);
@@ -8933,12 +8983,12 @@ function_arg (CUMULATIVE_ARGS *cum, enum machine_mode mode, tree type,
 	     justification of BLKmode data when it has a size greater
 	     than one word.  Splitting the operation into two SImode loads
 	     or returning a DImode REG results in left justified data.  */
-	  if (mode == BLKmode)
+	  if (mode == BLKmode || (type && AGGREGATE_TYPE_P (type)))
 	    {
 	      rtx loc = gen_rtx_EXPR_LIST (VOIDmode,
 					   gen_rtx_REG (DImode, gpr_reg_base),
 					   const0_rtx);
-	      return gen_rtx_PARALLEL (mode, gen_rtvec (1, loc));
+	      return gen_rtx_PARALLEL (BLKmode, gen_rtvec (1, loc));
 	    }
 	}
       else
@@ -8999,7 +9049,9 @@ function_arg (CUMULATIVE_ARGS *cum, enum machine_mode mode, tree type,
 	      && cum->indirect)
 	  /* If the parameter is not a floating point parameter, then
 	     it belongs in GPRs.  */
-	  || !FLOAT_MODE_P (mode))
+	  || !FLOAT_MODE_P (mode)
+	  /* Structure with single SFmode field belongs in GPR.  */
+	  || (type && AGGREGATE_TYPE_P (type)))
 	retval = gen_rtx_REG (mode, gpr_reg_base);
       else
 	retval = gen_rtx_REG (mode, fpr_reg_base);
@@ -9050,6 +9102,48 @@ cmpib_comparison_operator (rtx op, enum machine_mode mode)
 	      || GET_CODE (op) == LEU));
 }
 
+/* Return a string to output before text in the current function.
+
+   This function is only used with SOM.  Because we don't support
+   named subspaces, we can only create a new subspace or switch back
+   to the default text subspace.  */
+const char *
+som_text_section_asm_op (void)
+{
+  if (!TARGET_SOM)
+    return "";
+
+  if (TARGET_GAS)
+    {
+      if (cfun && !cfun->machine->in_nsubspa)
+	{
+	  /* We only want to emit a .nsubspa directive once at the
+	     start of the function.  */
+	  cfun->machine->in_nsubspa = 1;
+
+	  /* Create a new subspace for the text.  This provides
+	     better stub placement and one-only functions.  */
+	  if (cfun->decl
+	      && DECL_ONE_ONLY (cfun->decl)
+	      && !DECL_WEAK (cfun->decl))
+	    return
+ "\t.SPACE $TEXT$\n\t.NSUBSPA $CODE$,QUAD=0,ALIGN=8,ACCESS=44,SORT=24,COMDAT";
+	}
+      else
+	{
+	  /* There isn't a current function or the body of the current
+	     function has been completed.  So, we are changing to the
+	     text section to output debugging information.  We need to
+	     forget that we are in the text section so that the function
+	     text_section in varasm.c will call us the next time around.  */
+	  forget_section ();
+	}
+      return "\t.SPACE $TEXT$\n\t.NSUBSPA $CODE$";
+    }
+
+  return "\t.SPACE $TEXT$\n\t.SUBSPA $CODE$";
+}
+
 /* On hpux10, the linker will give an error if we have a reference
    in the read-only data section to a symbol defined in a shared
    library.  Therefore, expressions that might require a reloc can
@@ -9066,11 +9160,23 @@ pa_select_section (tree exp, int reloc,
       && (DECL_INITIAL (exp) == error_mark_node
           || TREE_CONSTANT (DECL_INITIAL (exp)))
       && !reloc)
-    readonly_data_section ();
+    {
+      if (TARGET_SOM
+	  && DECL_ONE_ONLY (exp)
+	  && !DECL_WEAK (exp))
+	som_one_only_readonly_data_section ();
+      else
+	readonly_data_section ();
+    }
   else if (TREE_CODE_CLASS (TREE_CODE (exp)) == 'c'
 	   && !(TREE_CODE (exp) == STRING_CST && flag_writable_strings)
 	   && !reloc)
     readonly_data_section ();
+  else if (TARGET_SOM
+	   && TREE_CODE (exp) == VAR_DECL
+	   && DECL_ONE_ONLY (exp)
+	   && !DECL_WEAK (exp))
+    som_one_only_data_section ();
   else
     data_section ();
 }

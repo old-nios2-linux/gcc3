@@ -1,3 +1,28 @@
+2006-03-05  Release Manager
+
+	* GCC 3.4.6 released.
+
+2005-11-30  Release Manager
+
+	* GCC 3.4.5 released.
+
+2005-05-19  Release Manager
+
+	* GCC 3.4.4 released.
+
+2004-11-04  Release Manager
+
+	* GCC 3.4.3 released.
+
+2004-09-23  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR bootstrap/17369
+	* gcc-lib-path.m4: New file.
+
+2004-09-06  Release Manager
+
+	* GCC 3.4.2 released.
+
 2004-07-01  Release Manager
 
 	* GCC 3.4.1 released.

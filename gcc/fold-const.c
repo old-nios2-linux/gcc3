@@ -1467,33 +1467,36 @@ const_binop (enum tree_code code, tree arg1, tree arg2, int notrunc)
 
 	case RDIV_EXPR:
 	  {
+	    tree t1, t2, real, imag;
 	    tree magsquared
 	      = const_binop (PLUS_EXPR,
 			     const_binop (MULT_EXPR, r2, r2, notrunc),
 			     const_binop (MULT_EXPR, i2, i2, notrunc),
 			     notrunc);
 
-	    t = build_complex (type,
-			       const_binop
-			       (INTEGRAL_TYPE_P (TREE_TYPE (r1))
-				? TRUNC_DIV_EXPR : RDIV_EXPR,
-				const_binop (PLUS_EXPR,
-					     const_binop (MULT_EXPR, r1, r2,
-							  notrunc),
-					     const_binop (MULT_EXPR, i1, i2,
-							  notrunc),
-					     notrunc),
-				magsquared, notrunc),
-			       const_binop
-			       (INTEGRAL_TYPE_P (TREE_TYPE (r1))
-				? TRUNC_DIV_EXPR : RDIV_EXPR,
-				const_binop (MINUS_EXPR,
-					     const_binop (MULT_EXPR, i1, r2,
-							  notrunc),
-					     const_binop (MULT_EXPR, r1, i2,
-							  notrunc),
-					     notrunc),
-				magsquared, notrunc));
+	    t1 = const_binop (PLUS_EXPR,
+			      const_binop (MULT_EXPR, r1, r2, notrunc),
+			      const_binop (MULT_EXPR, i1, i2, notrunc),
+			      notrunc);
+	    t2 = const_binop (MINUS_EXPR,
+			      const_binop (MULT_EXPR, i1, r2, notrunc),
+			      const_binop (MULT_EXPR, r1, i2, notrunc),
+			      notrunc);
+
+	    if (INTEGRAL_TYPE_P (TREE_TYPE (r1)))
+	      {
+		real = const_binop (TRUNC_DIV_EXPR, t1, magsquared, notrunc);
+		imag = const_binop (TRUNC_DIV_EXPR, t2, magsquared, notrunc);
+	      }
+	    else
+	      {
+		real = const_binop (RDIV_EXPR, t1, magsquared, notrunc);
+		imag = const_binop (RDIV_EXPR, t2, magsquared, notrunc);
+		if (!real || !imag)
+		  return NULL_TREE;
+	      }
+
+	    t = build_complex (type, real, imag);
 	  }
 	  break;
 
@@ -1828,7 +1831,8 @@ fold_convert (tree type, tree arg)
   if (TYPE_MAIN_VARIANT (type) == TYPE_MAIN_VARIANT (orig))
     return fold (build1 (NOP_EXPR, type, arg));
 
-  if (INTEGRAL_TYPE_P (type) || POINTER_TYPE_P (type))
+  if (INTEGRAL_TYPE_P (type) || POINTER_TYPE_P (type)
+      || TREE_CODE (type) == OFFSET_TYPE)
     {
       if (TREE_CODE (arg) == INTEGER_CST)
 	{
@@ -1836,7 +1840,8 @@ fold_convert (tree type, tree arg)
 	  if (tem != NULL_TREE)
 	    return tem;
 	}
-      if (INTEGRAL_TYPE_P (orig) || POINTER_TYPE_P (orig))
+      if (INTEGRAL_TYPE_P (orig) || POINTER_TYPE_P (orig)
+	  || TREE_CODE (orig) == OFFSET_TYPE)
         return fold (build1 (NOP_EXPR, type, arg));
       if (TREE_CODE (orig) == COMPLEX_TYPE)
 	{
@@ -2187,10 +2192,21 @@ operand_equal_p (tree arg0, tree arg1, int only_const)
     {
     case '1':
       /* Two conversions are equal only if signedness and modes match.  */
-      if ((TREE_CODE (arg0) == NOP_EXPR || TREE_CODE (arg0) == CONVERT_EXPR)
-	  && (TREE_UNSIGNED (TREE_TYPE (arg0))
-	      != TREE_UNSIGNED (TREE_TYPE (arg1))))
-	return 0;
+      switch (TREE_CODE (arg0))
+        {
+        case NOP_EXPR:
+        case CONVERT_EXPR:
+        case FIX_CEIL_EXPR:
+        case FIX_TRUNC_EXPR:
+        case FIX_FLOOR_EXPR:
+        case FIX_ROUND_EXPR:
+	  if (TREE_UNSIGNED (TREE_TYPE (arg0))
+	      != TREE_UNSIGNED (TREE_TYPE (arg1)))
+	    return 0;
+	  break;
+	default:
+	  break;
+	}
 
       return operand_equal_p (TREE_OPERAND (arg0, 0),
 			      TREE_OPERAND (arg1, 0), 0);
@@ -3535,7 +3551,13 @@ build_range_check (tree type, tree exp, int in_p, tree low, tree high)
       HOST_WIDE_INT hi;
       int prec;
 
-      prec = TYPE_PRECISION (etype);
+      /* For enums the comparison will be done in the underlying type,
+	 so using enum's precision is wrong here.
+	 Consider e.g. enum { A, B, C, D, E }, low == B and high == D.  */
+      if (TREE_CODE (etype) == ENUMERAL_TYPE)
+	prec = GET_MODE_BITSIZE (TYPE_MODE (etype));
+      else
+	prec = TYPE_PRECISION (etype);
       if (prec <= HOST_BITS_PER_WIDE_INT)
 	{
 	  hi = 0;
@@ -4446,9 +4468,9 @@ extract_muldiv_1 (tree t, tree c, enum tree_code code, tree wide_type)
 		     && TYPE_IS_SIZETYPE (TREE_TYPE (op0)))
 	       && (GET_MODE_SIZE (TYPE_MODE (ctype))
 	           > GET_MODE_SIZE (TYPE_MODE (TREE_TYPE (op0)))))
-	      /* ... or its type is larger than ctype,
-		 then we cannot pass through this truncation.  */
-	      || (GET_MODE_SIZE (TYPE_MODE (ctype))
+	      /* ... or this is a truncation (t is narrower than op0),
+		 then we cannot pass through this narrowing.  */
+	      || (GET_MODE_SIZE (TYPE_MODE (type))
 		  < GET_MODE_SIZE (TYPE_MODE (TREE_TYPE (op0))))
 	      /* ... or signedness changes for division or modulus,
 		 then we cannot pass through this conversion.  */
@@ -4469,7 +4491,21 @@ extract_muldiv_1 (tree t, tree c, enum tree_code code, tree wide_type)
 	return t1;
       break;
 
-    case NEGATE_EXPR:  case ABS_EXPR:
+    case ABS_EXPR:
+      /* If widening the type changes it from signed to unsigned, then we
+         must avoid building ABS_EXPR itself as unsigned.  */
+      if (TREE_UNSIGNED (ctype) && !TREE_UNSIGNED (type))
+        {
+          tree cstype = (*lang_hooks.types.signed_type) (ctype);
+          if ((t1 = extract_muldiv (op0, c, code, cstype)) != 0)
+            {
+              t1 = fold (build1 (tcode, cstype, fold_convert (cstype, t1)));
+              return fold_convert (ctype, t1);
+            }
+          break;
+        }
+      /* FALLTHROUGH */
+    case NEGATE_EXPR:
       if ((t1 = extract_muldiv (op0, c, code, wide_type)) != 0)
 	return fold (build1 (tcode, ctype, fold_convert (ctype, t1)));
       break;
@@ -7464,6 +7500,8 @@ fold (tree expr)
       else if (TREE_CODE (TREE_TYPE (arg0)) == INTEGER_TYPE
 	       && TREE_CODE (arg0) == NOP_EXPR
 	       && (tem = get_unwidened (arg0, NULL_TREE)) != arg0
+	       && (TYPE_PRECISION (TREE_TYPE (tem))
+		   > TYPE_PRECISION (TREE_TYPE (arg0)))
 	       && (code == EQ_EXPR || code == NE_EXPR
 		   || TREE_UNSIGNED (TREE_TYPE (arg0))
 		      == TREE_UNSIGNED (TREE_TYPE (tem)))
@@ -8104,7 +8142,12 @@ fold (tree expr)
 
 	  if (INTEGRAL_TYPE_P (type)
 	      && TREE_CODE (TREE_OPERAND (arg0, 1)) == INTEGER_CST
-	      && TREE_CODE (arg2) == INTEGER_CST)
+	      && TREE_CODE (arg2) == INTEGER_CST
+	      /* ???  We somehow can end up here with
+		  (unsigned int)1 == 1 ? 1U : 2U
+		 for which we won't make any progress but recurse
+		 indefinitely.  Just stop here in this case.  */
+	      && TREE_CODE (arg1) != INTEGER_CST)
 	    switch (comp_code)
 	      {
 	      case EQ_EXPR:
@@ -8161,8 +8204,9 @@ fold (tree expr)
 
       /* If the second operand is simpler than the third, swap them
 	 since that produces better jump optimization results.  */
-      if (tree_swap_operands_p (TREE_OPERAND (t, 1),
-				TREE_OPERAND (t, 2), false))
+      if (truth_value_p (TREE_CODE (arg0))
+	  && tree_swap_operands_p (TREE_OPERAND (t, 1),
+				   TREE_OPERAND (t, 2), false))
 	{
 	  /* See if this can be inverted.  If it can't, possibly because
 	     it was a floating-point inequality comparison, don't do
@@ -8398,7 +8442,7 @@ fold_checksum_tree (tree expr, struct md5_ctx *ctx, htab_t ht)
 {
   void **slot;
   enum tree_code code;
-  char buf[sizeof (struct tree_decl)];
+  struct tree_decl buf;
   int i, len;
 
   if (sizeof (struct tree_exp) + 5 * sizeof (tree)
@@ -8415,23 +8459,23 @@ fold_checksum_tree (tree expr, struct md5_ctx *ctx, htab_t ht)
   if (code == SAVE_EXPR && SAVE_EXPR_NOPLACEHOLDER (expr))
     {
       /* Allow SAVE_EXPR_NOPLACEHOLDER flag to be modified.  */
-      memcpy (buf, expr, tree_size (expr));
-      expr = (tree) buf;
+      memcpy (&buf, expr, tree_size (expr));
+      expr = (tree) &buf;
       SAVE_EXPR_NOPLACEHOLDER (expr) = 0;
     }
   else if (TREE_CODE_CLASS (code) == 'd' && DECL_ASSEMBLER_NAME_SET_P (expr))
     {
       /* Allow DECL_ASSEMBLER_NAME to be modified.  */
-      memcpy (buf, expr, tree_size (expr));
-      expr = (tree) buf;
+      memcpy (&buf, expr, tree_size (expr));
+      expr = (tree) &buf;
       SET_DECL_ASSEMBLER_NAME (expr, NULL);
     }
   else if (TREE_CODE_CLASS (code) == 't'
 	   && (TYPE_POINTER_TO (expr) || TYPE_REFERENCE_TO (expr)))
     {
       /* Allow TYPE_POINTER_TO and TYPE_REFERENCE_TO to be modified.  */
-      memcpy (buf, expr, tree_size (expr));
-      expr = (tree) buf;
+      memcpy (&buf, expr, tree_size (expr));
+      expr = (tree) &buf;
       TYPE_POINTER_TO (expr) = NULL;
       TYPE_REFERENCE_TO (expr) = NULL;
     }

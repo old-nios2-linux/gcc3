@@ -1,6 +1,7 @@
 /* Subroutines for assembler code output for Altera NIOS 2G NIOS2 version.
    Copyright (C) 2005 Altera
-   Contributed by Jonah Graham (jgraham@altera.com) and Will Reece (wreece@altera.com).
+   Contributed by Jonah Graham (jgraham@altera.com), Will Reece (wreece@altera.com),
+   and Jeff DaSilva (jdasilva@altera.com).
 
 This file is part of GNU CC.
 
@@ -273,7 +274,9 @@ Rule #  Example Insn                       Effect
                                            cfa_store.reg=sp, cfa_store.offset=total_frame_size
 12      stw     ra, offset(sp)
 12      stw     r16, offset(sp)
-1       mov     fp, sp
+
+12      stw     fp, fp2sp-offset(sp)
+1       addi    fp, sp, -fp2sp-offset
 
 Case 2:
 Rule #  Example Insn                       Effect
@@ -283,7 +286,10 @@ Rule #  Example Insn                       Effect
 5       add     r8, r8, sp                 cfa_store.reg=r8, cfa_store.offset=0
 12      stw     ra, offset(r8)
 12      stw     r16, offset(r8)
-1       mov     fp, sp
+
+
+12       stw     fp, fp2r8-offset(r8)
+         addi    fp, r8, -fp2r8-offset
 
 */
 
@@ -293,6 +299,7 @@ expand_prologue ()
   int i;
   HOST_WIDE_INT total_frame_size;
   int cfa_store_offset = 0;
+  HOST_WIDE_INT sp_fp_offset = 0;
   rtx insn;
   rtx cfa_store_reg = 0;
 
@@ -373,6 +380,8 @@ expand_prologue ()
     {
       cfa_store_offset -= 4;
       save_reg (FP_REGNO, cfa_store_offset, cfa_store_reg);
+
+      sp_fp_offset = cfa_store_offset;
     }
 
   for (i = 0; i < FIRST_PSEUDO_REGISTER; i++)
@@ -386,11 +395,18 @@ expand_prologue ()
 
   if (frame_pointer_needed)
     {
-      insn = emit_insn (gen_rtx_SET (SImode,
-                                     gen_rtx_REG (SImode, FP_REGNO),
-                                     gen_rtx_REG (SImode, SP_REGNO)));
+      insn = gen_rtx_SET (SImode,
+                          gen_rtx_REG (SImode, FP_REGNO),
+                          gen_rtx_PLUS (SImode,
+                                        cfa_store_reg,
+                                        GEN_INT (sp_fp_offset)));
 
-      RTX_FRAME_RELATED_P (insn) = 1;
+      insn = emit_insn (insn);
+
+      if (cfa_store_reg == stack_pointer_rtx) 
+        {
+          RTX_FRAME_RELATED_P (insn) = 1;
+        }
     }
 
   /* If we are profiling, make sure no instructions are scheduled before
@@ -444,6 +460,7 @@ expand_epilogue (bool sibcall_p)
 
   if (total_frame_size)
     {
+
       rtx sp_adjust;
 
       if (TOO_BIG_OFFSET (total_frame_size))
@@ -587,36 +604,63 @@ compute_frame_size ()
 
 
 int
-nios2_initial_elimination_offset (int from, int to ATTRIBUTE_UNUSED)
+nios2_initial_elimination_offset (int from, int to)
 {
-  int offset;
+    int offset;
 
-  /* Set OFFSET to the offset from the stack pointer.  */
-  switch (from)
+    compute_frame_size ();
+
+    /* Set OFFSET to the offset from the stack pointer.  */
+    switch (from)
     {
     case FRAME_POINTER_REGNUM:
-      offset = 0;
-      break;
+
+        offset = 0;
+
+        break;
 
     case ARG_POINTER_REGNUM:
-      compute_frame_size ();
-      offset = cfun->machine->frame.total_size;
-      offset -= current_function_pretend_args_size;
-      break;
+
+        offset = cfun->machine->frame.total_size;
+        offset -= current_function_pretend_args_size;
+
+        break;
 
     case RETURN_ADDRESS_POINTER_REGNUM:
-      compute_frame_size ();
       /* since the return address is always the first of the
          saved registers, return the offset to the beginning
          of the saved registers block */
+
       offset = cfun->machine->frame.save_regs_offset;
+
+
       break;
 
     default:
       abort ();
     }
 
-  return offset;
+    /* If we are asked for the frame pointer offset, then adjust OFFSET
+       by the offset from the frame pointer to the stack pointer.  */
+    if( to == HARD_FRAME_POINTER_REGNUM )
+    {
+        int fp_to_sp_offset;
+
+        // Get The FP to SP offset
+        fp_to_sp_offset = (cfun->machine->frame.save_regs_offset
+                        + cfun->machine->frame.save_reg_rounded - 4) * (-1);
+
+        if (MUST_SAVE_REGISTER (RA_REGNO))
+          {
+            fp_to_sp_offset += 4;
+          }
+
+        offset += fp_to_sp_offset;
+
+    } /*else to == STACK_POINTER_REGNUM */
+
+
+    return offset;
 }
 
 /* Return nonzero if this function is known to have a null epilogue.
@@ -1527,38 +1571,38 @@ have_nios2_fpu_cmp_insn( enum rtx_code cond_t, enum cmp_type cmp_t )
   if (cmp_t == CMP_SF)
     {
       switch (cond_t) {
-      case EQ: 
+      case EQ:
         return (nios2_fpu_insns[nios2_fpu_nios2_seqsf].N >= 0);
-      case NE: 
+      case NE:
         return (nios2_fpu_insns[nios2_fpu_nios2_snesf].N >= 0);
-      case GT: 
+      case GT:
         return (nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N >= 0);
-      case GE: 
+      case GE:
         return (nios2_fpu_insns[nios2_fpu_nios2_sgesf].N >= 0);
-      case LT: 
+      case LT:
         return (nios2_fpu_insns[nios2_fpu_nios2_sltsf].N >= 0);
-      case LE: 
+      case LE:
         return (nios2_fpu_insns[nios2_fpu_nios2_slesf].N >= 0);
-      default: 
+      default:
         break;
       }
     }
   else if (cmp_t == CMP_DF)
     {
       switch (cond_t) {
-      case EQ: 
+      case EQ:
         return (nios2_fpu_insns[nios2_fpu_nios2_seqdf].N >= 0);
-      case NE: 
+      case NE:
         return (nios2_fpu_insns[nios2_fpu_nios2_snedf].N >= 0);
-      case GT: 
+      case GT:
         return (nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N >= 0);
-      case GE: 
+      case GE:
         return (nios2_fpu_insns[nios2_fpu_nios2_sgedf].N >= 0);
-      case LT: 
+      case LT:
         return (nios2_fpu_insns[nios2_fpu_nios2_sltdf].N >= 0);
-      case LE: 
+      case LE:
         return (nios2_fpu_insns[nios2_fpu_nios2_sledf].N >= 0);
-      default: 
+      default:
         break;
       }
     }
@@ -1683,7 +1727,7 @@ gen_int_relational (enum rtx_code test_code, /* relational test (EQ, etc) */
           test_code = get_reverse_cond(test_code);
           reverse_operands = !reverse_operands;
         }
-      
+
       if (reverse_operands)
         {
           rtx temp = cmp0;
@@ -2807,7 +2851,7 @@ nios2_output_fpu_insn_cmps (rtx insn, enum rtx_code cond)
   int operandL = 2;
   int operandR = 3;
 
-  if ( !have_nios2_fpu_cmp_insn(cond, CMP_SF) && 
+  if ( !have_nios2_fpu_cmp_insn(cond, CMP_SF) &&
        have_nios2_fpu_cmp_insn(get_reverse_cond(cond), CMP_SF) ) {
 
     int temp = operandL;
@@ -2823,15 +2867,15 @@ nios2_output_fpu_insn_cmps (rtx insn, enum rtx_code cond)
       N = nios2_fpu_insns[nios2_fpu_nios2_seqsf].N;
       opt = "fcmpeqs";
       break;
-    case NE: 
+    case NE:
       N = nios2_fpu_insns[nios2_fpu_nios2_snesf].N;
       opt = "fcmpnes";
       break;
-    case GT: 
+    case GT:
       N = nios2_fpu_insns[nios2_fpu_nios2_sgtsf].N;
-      opt = "fcmpgts"; 
+      opt = "fcmpgts";
       break;
-    case GE: 
+    case GE:
       N = nios2_fpu_insns[nios2_fpu_nios2_sgesf].N;
       opt = "fcmpges";
       break;
@@ -2842,7 +2886,7 @@ nios2_output_fpu_insn_cmps (rtx insn, enum rtx_code cond)
     case LE:
       N = nios2_fpu_insns[nios2_fpu_nios2_slesf].N;
       opt = "fcmples"; break;
-    default: 
+    default:
       fatal_insn ("bad single compare", insn);
     }
 
@@ -2878,7 +2922,7 @@ nios2_output_fpu_insn_cmpd (rtx insn, enum rtx_code cond)
   int operandL = 2;
   int operandR = 3;
 
-  if ( !have_nios2_fpu_cmp_insn(cond, CMP_DF) && 
+  if ( !have_nios2_fpu_cmp_insn(cond, CMP_DF) &&
        have_nios2_fpu_cmp_insn(get_reverse_cond(cond), CMP_DF) ) {
 
     int temp = operandL;
@@ -2890,31 +2934,31 @@ nios2_output_fpu_insn_cmpd (rtx insn, enum rtx_code cond)
 
   switch (cond)
     {
-    case EQ: 
-      N = nios2_fpu_insns[nios2_fpu_nios2_seqdf].N; 
-      opt = "fcmpeqd"; 
+    case EQ:
+      N = nios2_fpu_insns[nios2_fpu_nios2_seqdf].N;
+      opt = "fcmpeqd";
       break;
-    case NE: 
-      N = nios2_fpu_insns[nios2_fpu_nios2_snedf].N; 
-      opt = "fcmpned"; 
+    case NE:
+      N = nios2_fpu_insns[nios2_fpu_nios2_snedf].N;
+      opt = "fcmpned";
       break;
-    case GT: 
-      N = nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N; 
-      opt = "fcmpgtd"; 
+    case GT:
+      N = nios2_fpu_insns[nios2_fpu_nios2_sgtdf].N;
+      opt = "fcmpgtd";
       break;
-    case GE: 
-      N = nios2_fpu_insns[nios2_fpu_nios2_sgedf].N; 
-      opt = "fcmpged"; 
+    case GE:
+      N = nios2_fpu_insns[nios2_fpu_nios2_sgedf].N;
+      opt = "fcmpged";
       break;
-    case LT: 
-      N = nios2_fpu_insns[nios2_fpu_nios2_sltdf].N; 
-      opt = "fcmpltd"; 
+    case LT:
+      N = nios2_fpu_insns[nios2_fpu_nios2_sltdf].N;
+      opt = "fcmpltd";
       break;
-    case LE: 
-      N = nios2_fpu_insns[nios2_fpu_nios2_sledf].N; 
-      opt = "fcmpled"; 
+    case LE:
+      N = nios2_fpu_insns[nios2_fpu_nios2_sledf].N;
+      opt = "fcmpled";
       break;
-    default: 
+    default:
       fatal_insn ("bad double compare", insn);
     }
 

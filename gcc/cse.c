@@ -83,11 +83,12 @@ Registers and "quantity numbers":
    `reg_qty' records what quantity a register is currently thought
    of as containing.
 
-   All real quantity numbers are greater than or equal to `max_reg'.
-   If register N has not been assigned a quantity, reg_qty[N] will equal N.
+   All real quantity numbers are greater than or equal to zero.
+   If register N has not been assigned a quantity, reg_qty[N] will
+   equal -N - 1, which is always negative.
 
-   Quantity numbers below `max_reg' do not exist and none of the `qty_table'
-   entries should be referenced with an index below `max_reg'.
+   Quantity numbers below zero do not exist and none of the `qty_table'
+   entries should be referenced with a negative index.
 
    We also maintain a bidirectional chain of registers for each
    quantity number.  The `qty_table` members `first_reg' and `last_reg',
@@ -503,9 +504,9 @@ struct table_elt
    a cost of 2.  Aside from these special cases, call `rtx_cost'.  */
 
 #define CHEAP_REGNO(N) \
-  ((N) == FRAME_POINTER_REGNUM || (N) == HARD_FRAME_POINTER_REGNUM 	\
-   || (N) == STACK_POINTER_REGNUM || (N) == ARG_POINTER_REGNUM	     	\
-   || ((N) >= FIRST_VIRTUAL_REGISTER && (N) <= LAST_VIRTUAL_REGISTER) 	\
+  ((N) == FRAME_POINTER_REGNUM || (N) == HARD_FRAME_POINTER_REGNUM	\
+   || (N) == STACK_POINTER_REGNUM || (N) == ARG_POINTER_REGNUM		\
+   || ((N) >= FIRST_VIRTUAL_REGISTER && (N) <= LAST_VIRTUAL_REGISTER)	\
    || ((N) < FIRST_PSEUDO_REGISTER					\
        && FIXED_REGNO_P (N) && REGNO_REG_CLASS (N) != NO_REGS))
 
@@ -514,7 +515,7 @@ struct table_elt
 
 /* Get the info associated with register N.  */
 
-#define GET_CSE_REG_INFO(N) 			\
+#define GET_CSE_REG_INFO(N)			\
   (((N) == cached_regno && cached_cse_reg_info)	\
    ? cached_cse_reg_info : get_cse_reg_info ((N)))
 
@@ -539,7 +540,7 @@ struct table_elt
 /* Determine if the quantity number for register X represents a valid index
    into the qty_table.  */
 
-#define REGNO_QTY_VALID_P(N) (REG_QTY (N) != (int) (N))
+#define REGNO_QTY_VALID_P(N) (REG_QTY (N) >= 0)
 
 static struct table_elt *table[HASH_SIZE];
 
@@ -661,7 +662,7 @@ static bool dead_libcall_p (rtx, int *);
 static int cse_change_cc_mode (rtx *, void *);
 static void cse_change_cc_mode_insns (rtx, rtx, rtx);
 static enum machine_mode cse_cc_succs (basic_block, rtx, rtx, bool);
-
+
 /* Nonzero if X has the form (PLUS frame-pointer integer).  We check for
    virtual regs here because the simplify_*_operation routines are called
    by integrate.c, which is called before virtual register instantiation.  */
@@ -693,7 +694,7 @@ fixed_base_plus_p (rtx x)
       return false;
     }
 }
-
+
 /* Dump the expressions in the equivalence class indicated by CLASSP.
    This function is used only for debugging.  */
 void
@@ -943,7 +944,7 @@ get_cse_reg_info (unsigned int regno)
       p->reg_tick = 1;
       p->reg_in_table = -1;
       p->subreg_ticked = -1;
-      p->reg_qty = regno;
+      p->reg_qty = -regno - 1;
       p->regno = regno;
       p->next = cse_reg_info_used_list;
       cse_reg_info_used_list = p;
@@ -967,7 +968,7 @@ new_basic_block (void)
 {
   int i;
 
-  next_qty = max_reg;
+  next_qty = 0;
 
   /* Clear out hash table state for this pass.  */
 
@@ -1113,7 +1114,7 @@ delete_reg_equiv (unsigned int reg)
   int p, n;
 
   /* If invalid, do nothing.  */
-  if (q == (int) reg)
+  if (! REGNO_QTY_VALID_P (reg))
     return;
 
   ent = &qty_table[q];
@@ -1130,7 +1131,7 @@ delete_reg_equiv (unsigned int reg)
   else
     ent->first_reg = n;
 
-  REG_QTY (reg) = reg;
+  REG_QTY (reg) = -reg - 1;
 }
 
 /* Remove any invalid expressions from the hash table
@@ -1734,8 +1735,8 @@ merge_equiv_classes (struct table_elt *class1, struct table_elt *class2)
 
 	  if (GET_CODE (exp) == REG)
 	    {
-	      need_rehash = (unsigned) REG_QTY (REGNO (exp)) != REGNO (exp);
-	    delete_reg_equiv (REGNO (exp));
+	      need_rehash = REGNO_QTY_VALID_P (REGNO (exp));
+	      delete_reg_equiv (REGNO (exp));
 	    }
 
 	  remove_from_table (elt, hash);
@@ -2249,7 +2250,7 @@ canon_hash (rtx x, enum machine_mode mode)
 	  record = false;
 	else
 	  record = true;
-	    
+
 	if (!record)
 	  {
 	    do_not_record = 1;
@@ -2327,7 +2328,7 @@ canon_hash (rtx x, enum machine_mode mode)
 	  return 0;
 	}
       if (! RTX_UNCHANGING_P (x) || fixed_base_plus_p (XEXP (x, 0)))
-	  hash_arg_in_memory = 1;
+	hash_arg_in_memory = 1;
 
       /* Now that we have already found this special case,
 	 might as well speed it up as much as possible.  */
@@ -3133,6 +3134,7 @@ find_comparison_args (enum rtx_code code, rtx *parg1, rtx *parg2,
 #ifdef FLOAT_STORE_FLAG_VALUE
 	  REAL_VALUE_TYPE fsfv;
 #endif
+          // JDS
 	  if (p->is_const)
 	    break;
 
@@ -3300,11 +3302,11 @@ fold_rtx (rtx x, rtx insn)
       /* If the next insn is a CODE_LABEL followed by a jump table,
 	 PC's value is a LABEL_REF pointing to that label.  That
 	 lets us fold switch statements on the VAX.  */
-	{
+      {
 	rtx next;
 	if (insn && tablejump_p (insn, &next, NULL))
-	    return gen_rtx_LABEL_REF (Pmode, next);
-	}
+	  return gen_rtx_LABEL_REF (Pmode, next);
+      }
       break;
 
     case SUBREG:
@@ -3519,6 +3521,9 @@ fold_rtx (rtx x, rtx insn)
 	      addr = addr_ent->const_rtx;
 	  }
 
+	/* Call target hook to avoid the effects of -fpic etc....  */
+	addr = targetm.delegitimize_address (addr);
+
 	/* If address is constant, split it into a base and integer offset.  */
 	if (GET_CODE (addr) == SYMBOL_REF || GET_CODE (addr) == LABEL_REF)
 	  base = addr;
@@ -3545,7 +3550,7 @@ fold_rtx (rtx x, rtx insn)
 
 	    if (CONSTANT_P (constant) && GET_CODE (constant) != CONST_INT)
 	      {
-	      constant_pool_entries_cost = COST (constant);
+		constant_pool_entries_cost = COST (constant);
 		constant_pool_entries_regcost = approx_reg_cost (constant);
 	      }
 
@@ -3870,6 +3875,10 @@ fold_rtx (rtx x, rtx insn)
       break;
 
     case '<':
+      /* Don't perform any simplifications of vector mode comparisons.  */
+      if (VECTOR_MODE_P (mode))
+	break;
+
       /* See what items are actually being compared and set FOLDED_ARG[01]
 	 to those values and CODE to the actual comparison code.  If any are
 	 constant, set CONST_ARG0 and CONST_ARG1 appropriately.  We needn't
@@ -4378,7 +4387,7 @@ gen_lowpart_if_possible (enum machine_mode mode, rtx x)
 
    In certain cases, this can cause us to add an equivalence.  For example,
    if we are following the taken case of
-   	if (i == 2)
+	if (i == 2)
    we can add the fact that `i' and '2' are now equivalent.
 
    In any case, we can record that this comparison was passed.  If the same
@@ -5633,11 +5642,11 @@ cse_insn (rtx insn, rtx libcall_insn)
 	  if (! rtx_equal_p (src, src_const))
 	    {
 	      /* Make sure that the rtx is not shared.  */
-	  src_const = copy_rtx (src_const);
+	      src_const = copy_rtx (src_const);
 
 	      /* Record the actual constant value in a REG_EQUAL note,
 		 making a new one if one does not already exist.  */
-	  set_unique_reg_note (insn, REG_EQUAL, src_const);
+	      set_unique_reg_note (insn, REG_EQUAL, src_const);
 	    }
 	}
 
@@ -6227,7 +6236,7 @@ cse_insn (rtx insn, rtx libcall_insn)
 	    }
 	  while (prev && GET_CODE (prev) == NOTE
 		 && NOTE_LINE_NUMBER (prev) != NOTE_INSN_BASIC_BLOCK);
-	    
+
 	  /* Do not swap the registers around if the previous instruction
 	     attaches a REG_EQUIV note to REG1.
 
@@ -7072,8 +7081,6 @@ cse_main (rtx f, int nregs, int after_loop, FILE *file)
       if (max_qty < 500)
 	max_qty = 500;
 
-      max_qty += max_reg;
-
       /* If this basic block is being extended by following certain jumps,
          (see `cse_end_of_basic_block'), we reprocess the code from the start.
          Otherwise, we start after this basic block.  */
@@ -7136,11 +7143,8 @@ cse_basic_block (rtx from, rtx to, struct branch_path *next_branch,
   int num_insns = 0;
   int no_conflict = 0;
 
-  /* This array is undefined before max_reg, so only allocate
-     the space actually needed and adjust the start.  */
-
-  qty_table = xmalloc ((max_qty - max_reg) * sizeof (struct qty_table_elem));
-  qty_table -= max_reg;
+  /* Allocate the space needed by qty_table.  */
+  qty_table = xmalloc (max_qty * sizeof (struct qty_table_elem));
 
   new_basic_block ();
 
@@ -7218,7 +7222,7 @@ cse_basic_block (rtx from, rtx to, struct branch_path *next_branch,
 		  /* Keep libcall_insn for the last SET insn of a no-conflict
 		     block to prevent changing the destination.  */
 		  if (! no_conflict)
-		libcall_insn = 0;
+		    libcall_insn = 0;
 		  else
 		    no_conflict = -1;
 		}
@@ -7251,7 +7255,7 @@ cse_basic_block (rtx from, rtx to, struct branch_path *next_branch,
 	{
 	  if (to == 0)
 	    {
-	      free (qty_table + max_reg);
+	      free (qty_table);
 	      return 0;
 	    }
 
@@ -7286,7 +7290,7 @@ cse_basic_block (rtx from, rtx to, struct branch_path *next_branch,
 	  /* If TO was the last insn in the function, we are done.  */
 	  if (insn == 0)
 	    {
-	      free (qty_table + max_reg);
+	      free (qty_table);
 	      return 0;
 	    }
 
@@ -7295,7 +7299,7 @@ cse_basic_block (rtx from, rtx to, struct branch_path *next_branch,
 	  prev = prev_nonnote_insn (to);
 	  if (prev && GET_CODE (prev) == BARRIER)
 	    {
-	      free (qty_table + max_reg);
+	      free (qty_table);
 	      return insn;
 	    }
 
@@ -7346,7 +7350,7 @@ cse_basic_block (rtx from, rtx to, struct branch_path *next_branch,
       && LABEL_NUSES (JUMP_LABEL (insn)) == 1)
     cse_around_loop (JUMP_LABEL (insn));
 
-  free (qty_table + max_reg);
+  free (qty_table);
 
   return to ? NEXT_INSN (to) : 0;
 }
@@ -7388,7 +7392,7 @@ count_reg_usage (rtx x, int *counts, int incr)
   switch (code = GET_CODE (x))
     {
     case REG:
-	counts[REGNO (x)] += incr;
+      counts[REGNO (x)] += incr;
       return;
 
     case PC:
@@ -7564,10 +7568,10 @@ dead_libcall_p (rtx insn, int *counts)
     return false;
 
   new = simplify_rtx (XEXP (note, 0));
-      if (!new)
-	new = XEXP (note, 0);
+  if (!new)
+    new = XEXP (note, 0);
 
-      /* While changing insn, we must update the counts accordingly.  */
+  /* While changing insn, we must update the counts accordingly.  */
   count_reg_usage (insn, counts, -1);
 
   if (validate_change (insn, &SET_SRC (set), new, 0))

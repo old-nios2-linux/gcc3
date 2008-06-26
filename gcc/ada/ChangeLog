@@ -1,3 +1,47 @@
+2006-03-05  Release Manager
+
+	* GCC 3.4.6 released.
+
+2005-11-30  Release Manager
+
+	* GCC 3.4.5 released.
+
+2005-05-19  Release Manager
+
+	* GCC 3.4.4 released.
+
+2005-01-18  Jakub Jelinek  <jakub@redhat.com>
+
+	PR ada/13470
+	* a-stunau.adb (Get_String): Don't return U.Reference, but Ret that is
+	set to the new string.
+
+2004-11-04  Release Manager
+
+	* GCC 3.4.3 released.
+
+2004-09-06  Release Manager
+
+	* GCC 3.4.2 released.
+
+2004-09-01  Laurent GUERBY <laurent@guerby.net>
+
+	* Make-lang.in (bldtools): revert previous commit since
+	it breaks parallel builds.
+	
+2004-09-01  Laurent GUERBY <laurent@guerby.net>
+        
+        * Make-lang.in (bldtools): force rebuild of
+        runtime with no optimization for bltools to workaround
+        a code generation bug in 3.4.2.
+
+2004-07-07  Kelley Cook  <kcook@gcc.gnu.org>
+
+	PR bootstrap/16250
+	* Make-lang.in (doc/gnat_ugn_unw.texi): Eliminate explicit
+	dependency on xgnatugn, instead build it via a submake.
+	(ADA_INFOFILES): Add doc/gnat_ugn_unw.texi.
+
 2004-07-01  Release Manager
 
 	* GCC 3.4.1 released.

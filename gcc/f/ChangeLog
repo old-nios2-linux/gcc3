@@ -1,3 +1,74 @@
+2006-03-05  Release Manager
+
+	* GCC 3.4.6 released.
+
+2006-01-21  Joseph Myers  <joseph@codesourcery.com>
+
+	* g77spec.c (lang_specific_driver): Update copyright notice date.
+
+2005-12-27  Toon Moene  <toon@moene.indiv.nluug.nl>
+
+	PR/25494
+	* g77.texi: Corrected entry about catching
+	Floating Point Exceptions.
+
+2005-11-30  Release Manager
+
+	* GCC 3.4.5 released.
+
+2005-05-19  Release Manager
+
+	* GCC 3.4.4 released.
+
+2004-12-30  Toon Moene  <toon@moene.indiv.nluug.nl>
+
+	* news.texi: Change GCC 3.5 to GCC 4.0
+
+2004-11-04  Release Manager
+
+	* GCC 3.4.3 released.
+
+2004-09-21  Bud Davis  <bdavis9659@comcast.net>
+
+	PR fortran/17541
+	* bld.c (ffebld_constant_new_real2_val): Fix typo,
+
+2004-09-06  Release Manager
+
+	* GCC 3.4.2 released.
+
+2004-09-02  Eric Botcazou  <ebotcazou@libertysurf.fr>
+
+	PR fortran/17180
+	* malloc.c (MALLOC_ALIGNMENT): Rename into MAX_ALIGNMENT
+	and use a host-based heuristics to determine it.
+	(ROUNDED_AREA_SIZE): Adjust.
+
+2004-09-01  Eric Botcazou  <ebotcazou@libertysurf.fr>
+
+	PR fortran/17180
+	* malloc.c (MALLOC_ALIGNMENT): New constant.
+	(ROUNDED_AREA_SIZE): Likewise.
+	(malloc_kill_area_): Use ROUNDED_AREA_SIZE.
+	(malloc_find_inpool_): Likewise.
+	(malloc_new_inpool_): Likewise.
+	(malloc_resize_inpool_): Likewise.
+
+2004-07-12  Bud Davis  <bdavis9659@comcast.net>
+
+	* bld.c (ffebld_constant_new_character1, ffebld_constant_new_complex{1,2},
+	ffebld_constant_new_hollerith, ffebld_constant_new_integer1,
+	ffebld_constant_new_integer{1,2,3,4}_val, ffebld_constant_new_logical1,
+	ffebld_constant_new_logical{1,2,3,4}_val, ffebld_constant_new_real{1,2},
+	ffebld_constant_new_typeless_ov):
+	Fill and use `rlink' and `llink' pointers in _ffebld_ struct.
+	* bld.h (struct _ffebld_): remove 'next' pointer, add
+	`rlink, llink' pointers; remove `negate' entry.
+	* malloc.c (malloc_kill_area_): Adapt for new `mallocArea' pointer.
+	(malloc_display_): Adapt.
+	(malloc_new_inpool_): Set it.
+	(malloc_resize_inpool_): Ditto.
+
 2004-07-01  Release Manager
 
 	* GCC 3.4.1 released.

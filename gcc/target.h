@@ -295,7 +295,7 @@ struct gcc_target
      Microsoft Visual C++ bitfield layout rules.  */
   bool (* ms_bitfield_layout_p) (tree record_type);
 
-  /* Return true if bitfields in RECORD_TYPE should be allocated
+ /* Return true if bitfields in RECORD_TYPE should be allocated
      within their base type's bytes starting at the opposite end.  */
   bool (* reverse_bitfield_layout_p) (tree record_type);
 
@@ -305,6 +305,11 @@ struct gcc_target
   /* Expand a target-specific builtin.  */
   rtx (* expand_builtin) (tree exp, rtx target, rtx subtarget,
 			  enum machine_mode mode, int ignore);
+
+  /* For a vendor-specific fundamental TYPE, return a pointer to
+     a statically-allocated string containing the C++ mangling for
+     TYPE.  In all other cases, return NULL.  */
+  const char * (* mangle_fundamental_type) (tree type);
 
   /* Make any adjustments to libfunc names needed for this target.  */
   void (* init_libfuncs) (void);

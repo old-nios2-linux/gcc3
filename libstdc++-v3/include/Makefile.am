@@ -204,7 +204,6 @@ ext_headers = \
 	${ext_srcdir}/algorithm \
 	${ext_srcdir}/bitmap_allocator.h \
 	${ext_srcdir}/debug_allocator.h \
-	${ext_srcdir}/demangle.h \
 	${ext_srcdir}/enc_filebuf.h \
 	${ext_srcdir}/stdio_filebuf.h \
 	${ext_srcdir}/stdio_sync_filebuf.h \
@@ -609,8 +608,8 @@ install-headers:
 
 install-pch:
 	$(mkinstalldirs) $(DESTDIR)${gxx_include_dir}/${pch_output_builddir}
-	for file in $(wildcard ${pch_output_builddir}/*); do \
-	  $(INSTALL_DATA) $${file} $(DESTDIR)${gxx_include_dir}/${pch_output_builddir}; done
+	for file in ${pch_output_builddir}/*; do \
+	  $(INSTALL_DATA) $$file $(DESTDIR)${gxx_include_dir}/${pch_output_builddir}; done
 
 # By adding these files here, automake will remove them for 'make clean'
 CLEANFILES = ${pch_input} ${pch_output_builddir}/*

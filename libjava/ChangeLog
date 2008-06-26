@@ -1,3 +1,88 @@
+2006-03-05  Release Manager
+
+	* GCC 3.4.6 released.
+
+2006-01-19  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR libgcj/25840
+	* include/x86_64-signal.h (RESTORE2): Add ".text\n".
+
+2005-11-30  Release Manager
+
+	* GCC 3.4.5 released.
+
+2005-05-19  Release Manager
+
+	* GCC 3.4.4 released.
+
+2005-01-17  Andrew Haley  <aph@redhat.com>
+
+	* java/lang/reflect/natMethod.cc (_Jv_CallAnyMethodA): In the case
+	of virtual dispatch, if we have no method index, and no code
+	pointer, look a method up by name.
+
+2005-01-17  Tom Tromey  <tromey@redhat.com>
+
+	* testsuite/libjava.jni/iface.c: New file.
+	* testsuite/libjava.jni/iface.out: New file.
+	* testsuite/libjava.jni/iface.java: New file.
+
+2004-12-06  Tom Tromey  <tromey@redhat.com>
+ 
+	For PR java/14853:
+	* testsuite/libjava.compile/PR14853.java: New file.
+	* testsuite/libjava.compile/PR14853.xfail: New file.
+ 
+2004-11-04  Release Manager
+
+	* GCC 3.4.3 released.
+
+2004-10-25  Eric Botcazou  <ebotcazou@libertysurf.fr>
+
+	PR other/18138
+	* testsuite/lib/libjava.exp: Accept more than one multilib libgcc.
+
+2004-09-06  Release Manager
+
+	* GCC 3.4.2 released.
+
+2004-07-13  Bryce McKinlay  <mckinlay@redhat.com>
+
+	PR libgcj/7587
+	* interpret.cc (compile_mutex): New.
+	(_Jv_InitInterpreter): New. Initialize compile_mutex.
+	(run): Lock compile_mutex before calling compile() if compilation is
+	required.
+	* prims.cc (_Jv_CreateJavaVM): Call _Jv_InitInterpreter().
+	* include/java-interp.h (_Jv_InitInterpreter): Declare.	
+
+2004-07-11  Mohan Embar  <gnustuff@thisiscool.com>
+
+	* gnu/java/net/natPlainDatagramSocketImplWin32.cc (several):
+	Removed IPv4-related conditional compilation.
+	(mcastGrp): Added missing declarations.
+
+2004-07-11  Bryce McKinlay  <mckinlay@redhat.com>
+
+	PR libgcj/16478	
+	* prims.cc (_Jv_CreateJavaVM): Fix comment.
+	* gnu/gcj/runtime/FinalizerThread.java (init): New. Native.
+	(finalizerReady): Now native.
+	(run): Likewise.
+	(runFinalizers): Removed.
+	* gnu/gcj/runtime/natFinalizerThread.cc (run): Implement here. Use
+	a primitive lock, and don't hold it while running the finalizers.
+	(runFinalizers): Implement. Don't aquire any Java lock.
+	(finalizerReady): Use lock primitives to signal finalizer thread.
+
+2004-07-11  Michael Koch  <konqueror@gmx.de>
+
+	PR libgcj/16473
+	* java/net/ServerSocket.java (accept): Don't create two client 
+	sockets when accepting connections.
+	* java/net/Socket.java (impl): Made package-private.
+	(implCreated): Likewise.
+
 2004-07-01  Release Manager
 
 	* GCC 3.4.1 released.

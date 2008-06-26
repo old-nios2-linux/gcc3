@@ -1,5 +1,5 @@
-This is fastjar.info, produced by makeinfo version 4.6 from
-/home/mitchell/gcc-3.4.1/gcc-3.4.1/fastjar/fastjar.texi.
+This is fastjar.info, produced by makeinfo version 4.8 from
+/home/gdr/build/gcc-3.4.6/gcc-3.4.6/fastjar/fastjar.texi.
 
 INFO-DIR-SECTION Programming
 START-INFO-DIR-ENTRY
@@ -39,8 +39,8 @@ This manual describes how to use `jar' and `grepjar'.
 
 File: fastjar.info,  Node: Invoking jar,  Next: Invoking grepjar,  Prev: Top,  Up: Top
 
-Invoking jar
-************
+1 Invoking jar
+**************
 
 `fastjar' is an implementation of Sun's jar utility that comes with the
 JDK, written entirely in C, and runs in a fraction of the time while
@@ -107,8 +107,8 @@ the same order the `-m' and `-f' flags are specified.
 
 File: fastjar.info,  Node: Invoking grepjar,  Next: Copying,  Prev: Invoking jar,  Up: Top
 
-Invoking grepjar
-****************
+2 Invoking grepjar
+******************
 
 The `grepjar' program can be used to search files in a jar file for a
 pattern.
@@ -148,9 +148,10 @@ GNU GENERAL PUBLIC LICENSE
 **************************
 
                          Version 2, June 1991
+
      Copyright (C) 1989, 1991 Free Software Foundation, Inc.
      59 Temple Place - Suite 330, Boston, MA  02111-1307, USA
-     
+
      Everyone is permitted to copy and distribute verbatim copies
      of this license document, but changing it is not allowed.
 
@@ -412,7 +413,6 @@ modification follow.
      and reuse of software generally.
 
                                 NO WARRANTY
-
  11. BECAUSE THE PROGRAM IS LICENSED FREE OF CHARGE, THERE IS NO
      WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY APPLICABLE
      LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
@@ -436,7 +436,6 @@ modification follow.
      ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
                       END OF TERMS AND CONDITIONS
-
 How to Apply These Terms to Your New Programs
 =============================================
 
@@ -452,17 +451,17 @@ the "copyright" line and a pointer to where the full notice is found.
 
      ONE LINE TO GIVE THE PROGRAM'S NAME AND A BRIEF IDEA OF WHAT IT DOES.
      Copyright (C) YEAR  NAME OF AUTHOR
-     
+
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
      the Free Software Foundation; either version 2 of the License, or
      (at your option) any later version.
-     
+
      This program is distributed in the hope that it will be useful,
      but WITHOUT ANY WARRANTY; without even the implied warranty of
      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
      GNU General Public License for more details.
-     
+
      You should have received a copy of the GNU General Public License
      along with this program; if not, write to the Free Software Foundation,
      Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
@@ -491,7 +490,7 @@ if necessary.  Here is a sample; alter the names:
 
      Yoyodyne, Inc., hereby disclaims all copyright interest in the program
      `Gnomovision' (which makes passes at compilers) written by James Hacker.
-     
+
      SIGNATURE OF TY COON, 1 April 1989
      Ty Coon, President of Vice
 
@@ -504,9 +503,9 @@ GNU Library General Public License instead of this License.
 
 
 Tag Table:
-Node: Top865
-Node: Invoking jar1167
-Node: Invoking grepjar2947
-Node: Copying3550
+Node: Top866
+Node: Invoking jar1168
+Node: Invoking grepjar2952
+Node: Copying3559
 
 End Tag Table
