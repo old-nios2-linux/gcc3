@@ -65,7 +65,7 @@ _init:
 	stw	r17, 16(sp)
 	stw	r16, 12(sp)
 	stw	fp, 8(sp)
-	mov	fp, sp
+	addi	fp, sp, 8
 	
 	
 	.section	".fini"
@@ -83,6 +83,6 @@ _fini:
 	stw	r17, 16(sp)
 	stw	r16, 12(sp)
 	stw	fp, 8(sp)
-	mov	fp, sp
+	addi	fp, sp, 8
 	
 

@@ -1,6 +1,7 @@
 /* Definitions of target machine for Altera NIOS 2G NIOS2 version.
-   Copyright (C) 2005 Altera 
-   Contributed by Jonah Graham (jgraham@altera.com) and Will Reece (wreece@altera.com).
+   Copyright (C) 2007 Altera
+   Contributed by Jonah Graham (jgraham@altera.com), Will Reece (wreece@altera.com),
+   and Jeff DaSilva (jdasilva@altera.com).
 
 This file is part of GNU CC.
 
